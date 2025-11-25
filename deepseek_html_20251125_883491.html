@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Nifty Trading Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0e1117;
+            color: white;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .metric-card {
+            background: #262730;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #444;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+        }
+        .tab.active {
+            border-bottom: 2px solid #00d4aa;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .chart-container {
+            background: #262730;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-green { background: #00d4aa; }
+        .status-red { background: #ff4444; }
+        .status-yellow { background: #ffeb3b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Enhanced Nifty Trading Dashboard</h1>
+            <p>Volume Analysis, Options Chain, Technical Bias & Trading Signals</p>
+        </div>
+
+        <div class="metrics-grid" id="metricsGrid">
+            <!-- Metrics will be populated by JavaScript -->
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="price">📈 Price Analysis</div>
+            <div class="tab" data-tab="options">📊 Options Analysis</div>
+            <div class="tab" data-tab="bias">🎯 Technical Bias</div>
+            <div class="tab" data-tab="signals">🚀 Trading Signals</div>
+            <div class="tab" data-tab="market">🌍 Market Data</div>
+            <div class="tab" data-tab="decision">🧠 Master Decision</div>
+        </div>
+
+        <div id="tabContent">
+            <!-- Tab content will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        const state = {
+            currentTab: 'price',
+            marketData: null,
+            chartData: null,
+            optionsData: null,
+            biasData: null
+        };
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeTabs();
+            loadInitialData();
+            setInterval(updateData, 30000); // Update every 30 seconds
+        });
+
+        function initializeTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabName = this.getAttribute('data-tab');
+                    switchTab(tabName);
+                });
+            });
+        }
+
+        function switchTab(tabName) {
+            // Update active tab
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Update content
+            state.currentTab = tabName;
+            renderTabContent();
+        }
+
+        function renderTabContent() {
+            const contentDiv = document.getElementById('tabContent');
+            
+            switch(state.currentTab) {
+                case 'price':
+                    contentDiv.innerHTML = renderPriceAnalysis();
+                    break;
+                case 'options':
+                    contentDiv.innerHTML = renderOptionsAnalysis();
+                    break;
+                case 'bias':
+                    contentDiv.innerHTML = renderBiasAnalysis();
+                    break;
+                case 'signals':
+                    contentDiv.innerHTML = renderTradingSignals();
+                    break;
+                case 'market':
+                    contentDiv.innerHTML = renderMarketData();
+                    break;
+                case 'decision':
+                    contentDiv.innerHTML = renderMasterDecision();
+                    break;
+            }
+        }
+
+        function renderPriceAnalysis() {
+            if (!state.chartData) {
+                return '<div class="chart-container">Loading chart data...</div>';
+            }
+
+            return `
+                <div class="chart-container">
+                    <div id="priceChart" style="height: 600px;"></div>
+                </div>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <h3>Current Price</h3>
+                        <div id="currentPrice">Loading...</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Volume</h3>
+                        <div id="currentVolume">Loading...</div>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Change</h3>
+                        <div id="priceChange">Loading...</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOptionsAnalysis() {
+            return `
+                <div class="chart-container">
+                    <h3>Options Chain Analysis</h3>
+                    <div id="optionsData">Loading options data...</div>
+                </div>
+            `;
+        }
+
+        function renderBiasAnalysis() {
+            return `
+                <div class="chart-container">
+                    <h3>Technical Bias Analysis</h3>
+                    <div id="biasData">Loading bias data...</div>
+                </div>
+            `;
+        }
+
+        function renderTradingSignals() {
+            return `
+                <div class="chart-container">
+                    <h3>Trading Signals</h3>
+                    <div id="signalsData">Loading signals...</div>
+                </div>
+            `;
+        }
+
+        function renderMarketData() {
+            return `
+                <div class="chart-container">
+                    <h3>Market Data</h3>
+                    <div id="marketData">Loading market data...</div>
+                </div>
+            `;
+        }
+
+        function renderMasterDecision() {
+            return `
+                <div class="chart-container">
+                    <h3>Master Decision Engine</h3>
+                    <div id="decisionData">Loading decision engine...</div>
+                    <button onclick="generateDecision()" style="padding: 10px 20px; background: #00d4aa; border: none; border-radius: 5px; color: white; cursor: pointer;">
+                        Generate Decision
+                    </button>
+                </div>
+            `;
+        }
+
+        async function loadInitialData() {
+            try {
+                const response = await fetch('/api/market-data');
+                const data = await response.json();
+                state.marketData = data;
+                updateMetrics();
+                renderTabContent();
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        async function updateData() {
+            try {
+                const response = await fetch('/api/market-data');
+                const data = await response.json();
+                state.marketData = data;
+                updateMetrics();
+                
+                if (state.currentTab === 'price' && state.chartData) {
+                    updateChart();
+                }
+            } catch (error) {
+                console.error('Error updating data:', error);
+            }
+        }
+
+        function updateMetrics() {
+            if (!state.marketData) return;
+
+            const metricsGrid = document.getElementById('metricsGrid');
+            const { nifty, vix, signals } = state.marketData;
+
+            metricsGrid.innerHTML = `
+                <div class="metric-card">
+                    <h3>Nifty 50</h3>
+                    <div>₹${nifty.price.toFixed(2)}</div>
+                    <div style="color: ${nifty.change >= 0 ? '#00d4aa' : '#ff4444'}">
+                        ${nifty.change >= 0 ? '↗' : '↘'} ${nifty.change.toFixed(2)}%
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <h3>India VIX</h3>
+                    <div>${vix.value.toFixed(2)}</div>
+                    <div style="color: ${vix.sentiment === 'LOW' ? '#00d4aa' : '#ff4444'}">
+                        ${vix.sentiment}
+                    </div>
+                </div>
+                <div class="metric-card">
+                    <h3>Market Bias</h3>
+                    <div>${signals.overallBias}</div>
+                    <div>Score: ${signals.biasScore.toFixed(1)}</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Confidence</h3>
+                    <div>${signals.confidence}%</div>
+                    <div class="status-indicator ${signals.confidence > 70 ? 'status-green' : signals.confidence > 50 ? 'status-yellow' : 'status-red'}"></div>
+                </div>
+            `;
+        }
+
+        async function generateDecision() {
+            try {
+                const response = await fetch('/api/generate-decision', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const decision = await response.json();
+                
+                document.getElementById('decisionData').innerHTML = `
+                    <div style="background: #1e1e1e; padding: 20px; border-radius: 8px; margin-top: 20px;">
+                        <h4>Decision: ${decision.tradeDecision}</h4>
+                        <p>Direction: ${decision.tradeDirection}</p>
+                        <p>Confidence: ${decision.confidence}%</p>
+                        <p>Position Size: ${decision.positionSize}</p>
+                        <p>Summary: ${decision.simpleSummary}</p>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error generating decision:', error);
+            }
+        }
+    </script>
+</body>
+</html>
