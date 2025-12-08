@@ -374,9 +374,24 @@ def fetch_option_chain_data(instrument):
         response = session.get(url, timeout=10)
         data = response.json()
 
+        # Check if the response has the expected structure
+        if 'records' not in data:
+            return {
+                'success': False,
+                'instrument': instrument,
+                'error': f"Invalid API response: 'records' key not found. NSE API may be temporarily unavailable or rate-limited. Response keys: {list(data.keys())}"
+            }
+
+        if 'data' not in data['records']:
+            return {
+                'success': False,
+                'instrument': instrument,
+                'error': f"Invalid API response: 'data' key not found in records. Response may be empty or malformed."
+            }
+
         records = data['records']['data']
-        expiry = data['records']['expiryDates'][0]
-        underlying = data['records']['underlyingValue']
+        expiry = data['records'].get('expiryDates', [None])[0]
+        underlying = data['records'].get('underlyingValue', 0)
 
         # Calculate totals
         total_ce_oi = sum(item['CE']['openInterest'] for item in records if 'CE' in item)
@@ -395,11 +410,29 @@ def fetch_option_chain_data(instrument):
             'total_pe_change': total_pe_change,
             'records': records
         }
+    except requests.exceptions.Timeout:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': 'Request timeout: NSE server took too long to respond'
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': f'Network error: {str(e)}'
+        }
+    except KeyError as e:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': f'Data parsing error: Missing key {str(e)} in API response'
+        }
     except Exception as e:
         return {
             'success': False,
             'instrument': instrument,
-            'error': str(e)
+            'error': f'Unexpected error: {type(e).__name__}: {str(e)}'
         }
 
 def display_overall_option_chain_analysis():

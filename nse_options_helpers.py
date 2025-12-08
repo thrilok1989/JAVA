@@ -329,9 +329,24 @@ def fetch_option_chain_data(instrument, NSE_INSTRUMENTS):
         response = session.get(url, timeout=10)
         data = response.json()
 
+        # Check if the response has the expected structure
+        if 'records' not in data:
+            return {
+                'success': False,
+                'instrument': instrument,
+                'error': f"Invalid API response: 'records' key not found. NSE API may be temporarily unavailable or rate-limited. Response keys: {list(data.keys())}"
+            }
+
+        if 'data' not in data['records']:
+            return {
+                'success': False,
+                'instrument': instrument,
+                'error': f"Invalid API response: 'data' key not found in records. Response may be empty or malformed."
+            }
+
         records = data['records']['data']
-        expiry = data['records']['expiryDates'][0]
-        underlying = data['records']['underlyingValue']
+        expiry = data['records'].get('expiryDates', [None])[0]
+        underlying = data['records'].get('underlyingValue', 0)
 
         # Calculate totals
         total_ce_oi = sum(item['CE']['openInterest'] for item in records if 'CE' in item)
@@ -350,11 +365,29 @@ def fetch_option_chain_data(instrument, NSE_INSTRUMENTS):
             'total_pe_change': total_pe_change,
             'records': records
         }
+    except requests.exceptions.Timeout:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': 'Request timeout: NSE server took too long to respond'
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': f'Network error: {str(e)}'
+        }
+    except KeyError as e:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': f'Data parsing error: Missing key {str(e)} in API response'
+        }
     except Exception as e:
         return {
             'success': False,
             'instrument': instrument,
-            'error': str(e)
+            'error': f'Unexpected error: {type(e).__name__}: {str(e)}'
         }
 
 def analyze_instrument(instrument, NSE_INSTRUMENTS):
@@ -926,126 +959,136 @@ def display_overall_option_chain_analysis(NSE_INSTRUMENTS):
         # === OVERALL MARKET BIAS ===
         st.subheader("🎯 Overall Market Bias")
 
-        # Calculate aggregated bias
-        bullish_count = sum(1 for d in pcr_data if '🐂' in d['OI Bias'] or '🐂' in d['Δ OI Bias'])
-        bearish_count = sum(1 for d in pcr_data if '🐻' in d['OI Bias'] or '🐻' in d['Δ OI Bias'])
-        neutral_count = len(pcr_data) - bullish_count - bearish_count
+        # Only show overall bias if we have data
+        if pcr_data:
+            # Calculate aggregated bias
+            bullish_count = sum(1 for d in pcr_data if '🐂' in d['OI Bias'] or '🐂' in d['Δ OI Bias'])
+            bearish_count = sum(1 for d in pcr_data if '🐻' in d['OI Bias'] or '🐻' in d['Δ OI Bias'])
+            neutral_count = len(pcr_data) - bullish_count - bearish_count
 
-        total_signals = len(pcr_data) * 2  # Each instrument has 2 signals (OI + Δ OI)
+            total_signals = len(pcr_data) * 2  # Each instrument has 2 signals (OI + Δ OI)
 
-        # Determine overall market bias
-        if bullish_count > bearish_count and bullish_count > neutral_count:
-            overall_bias = "🐂 BULLISH"
-            bias_color = "green"
-        elif bearish_count > bullish_count and bearish_count > neutral_count:
-            overall_bias = "🐻 BEARISH"
-            bias_color = "red"
-        else:
-            overall_bias = "⚖️ NEUTRAL"
-            bias_color = "gray"
+            # Determine overall market bias
+            if bullish_count > bearish_count and bullish_count > neutral_count:
+                overall_bias = "🐂 BULLISH"
+                bias_color = "green"
+            elif bearish_count > bullish_count and bearish_count > neutral_count:
+                overall_bias = "🐻 BEARISH"
+                bias_color = "red"
+            else:
+                overall_bias = "⚖️ NEUTRAL"
+                bias_color = "gray"
 
-        # Display overall bias
-        col1, col2, col3, col4 = st.columns(4)
+            # Display overall bias
+            col1, col2, col3, col4 = st.columns(4)
 
-        with col1:
-            st.markdown(f"<h2 style='color:{bias_color}; text-align: center;'>{overall_bias}</h2>",
-                       unsafe_allow_html=True)
-            st.caption("Overall Market Sentiment")
+            with col1:
+                st.markdown(f"<h2 style='color:{bias_color}; text-align: center;'>{overall_bias}</h2>",
+                           unsafe_allow_html=True)
+                st.caption("Overall Market Sentiment")
 
-        with col2:
-            st.metric("Bullish Signals", bullish_count, delta=f"{(bullish_count/total_signals*100):.1f}%")
+            with col2:
+                if total_signals > 0:
+                    st.metric("Bullish Signals", bullish_count, delta=f"{(bullish_count/total_signals*100):.1f}%")
+                else:
+                    st.metric("Bullish Signals", bullish_count)
 
-        with col3:
-            st.metric("Bearish Signals", bearish_count, delta=f"{(bearish_count/total_signals*100):.1f}%", delta_color="inverse")
+            with col3:
+                if total_signals > 0:
+                    st.metric("Bearish Signals", bearish_count, delta=f"{(bearish_count/total_signals*100):.1f}%", delta_color="inverse")
+                else:
+                    st.metric("Bearish Signals", bearish_count, delta_color="inverse")
 
-        with col4:
-            st.metric("Neutral Signals", neutral_count)
+            with col4:
+                st.metric("Neutral Signals", neutral_count)
 
-        # Market bias distribution chart
-        st.markdown("### 📊 Market Sentiment Distribution")
+            # Market bias distribution chart
+            st.markdown("### 📊 Market Sentiment Distribution")
 
-        sentiment_data = pd.DataFrame({
-            'Sentiment': ['Bullish', 'Bearish', 'Neutral'],
-            'Count': [bullish_count, bearish_count, neutral_count]
-        })
+            sentiment_data = pd.DataFrame({
+                'Sentiment': ['Bullish', 'Bearish', 'Neutral'],
+                'Count': [bullish_count, bearish_count, neutral_count]
+            })
 
-        fig = go.Figure(data=[
-            go.Bar(
-                x=sentiment_data['Sentiment'],
-                y=sentiment_data['Count'],
-                marker_color=['green', 'red', 'gray'],
-                text=sentiment_data['Count'],
-                textposition='auto'
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=sentiment_data['Sentiment'],
+                    y=sentiment_data['Count'],
+                    marker_color=['green', 'red', 'gray'],
+                    text=sentiment_data['Count'],
+                    textposition='auto'
+                )
+            ])
+
+            fig.update_layout(
+                title="Overall Market Sentiment Breakdown",
+                xaxis_title="Sentiment",
+                yaxis_title="Count",
+                template="plotly_white"
             )
-        ])
 
-        fig.update_layout(
-            title="Overall Market Sentiment Breakdown",
-            xaxis_title="Sentiment",
-            yaxis_title="Count",
-            template="plotly_white"
-        )
+            st.plotly_chart(fig, use_container_width=True)
 
-        st.plotly_chart(fig, use_container_width=True)
+            st.divider()
 
-        st.divider()
+            # === DETAILED BREAKDOWN BY CATEGORY ===
+            st.subheader("📈 Category-wise Analysis")
 
-        # === DETAILED BREAKDOWN BY CATEGORY ===
-        st.subheader("📈 Category-wise Analysis")
+            col1, col2 = st.columns(2)
 
-        col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("### 📊 Indices")
+                indices_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['indices']]
+                if indices_data:
+                    indices_df = pd.DataFrame(indices_data)
+                    st.dataframe(indices_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
+                               use_container_width=True, hide_index=True)
 
-        with col1:
-            st.markdown("### 📊 Indices")
-            indices_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['indices']]
-            if indices_data:
-                indices_df = pd.DataFrame(indices_data)
-                st.dataframe(indices_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
-                           use_container_width=True, hide_index=True)
+            with col2:
+                st.markdown("### 🏢 Stocks")
+                stocks_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['stocks']]
+                if stocks_data:
+                    stocks_df = pd.DataFrame(stocks_data)
+                    st.dataframe(stocks_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
+                               use_container_width=True, hide_index=True)
 
-        with col2:
-            st.markdown("### 🏢 Stocks")
-            stocks_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['stocks']]
-            if stocks_data:
-                stocks_df = pd.DataFrame(stocks_data)
-                st.dataframe(stocks_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
-                           use_container_width=True, hide_index=True)
+            st.divider()
 
-        st.divider()
+            # === TRADING RECOMMENDATION ===
+            st.subheader("💡 Trading Recommendation")
 
-        # === TRADING RECOMMENDATION ===
-        st.subheader("💡 Trading Recommendation")
+            if overall_bias == "🐂 BULLISH":
+                st.success("""
+                ### 🐂 BULLISH MARKET SENTIMENT DETECTED
 
-        if overall_bias == "🐂 BULLISH":
-            st.success("""
-            ### 🐂 BULLISH MARKET SENTIMENT DETECTED
+                **Recommended Actions:**
+                - ✅ Look for LONG/CALL opportunities
+                - ✅ Focus on instruments with high PUT OI accumulation
+                - ✅ Wait for support levels to enter
+                - ⚠️ Use proper stop losses
+                """)
+            elif overall_bias == "🐻 BEARISH":
+                st.error("""
+                ### 🐻 BEARISH MARKET SENTIMENT DETECTED
 
-            **Recommended Actions:**
-            - ✅ Look for LONG/CALL opportunities
-            - ✅ Focus on instruments with high PUT OI accumulation
-            - ✅ Wait for support levels to enter
-            - ⚠️ Use proper stop losses
-            """)
-        elif overall_bias == "🐻 BEARISH":
-            st.error("""
-            ### 🐻 BEARISH MARKET SENTIMENT DETECTED
+                **Recommended Actions:**
+                - ✅ Look for SHORT/PUT opportunities
+                - ✅ Focus on instruments with high CALL OI accumulation
+                - ✅ Wait for resistance levels to enter
+                - ⚠️ Use proper stop losses
+                """)
+            else:
+                st.warning("""
+                ### ⚖️ NEUTRAL MARKET SENTIMENT
 
-            **Recommended Actions:**
-            - ✅ Look for SHORT/PUT opportunities
-            - ✅ Focus on instruments with high CALL OI accumulation
-            - ✅ Wait for resistance levels to enter
-            - ⚠️ Use proper stop losses
-            """)
+                **Recommended Actions:**
+                - 🔄 Wait for clear directional bias
+                - 🔄 Focus on range-bound strategies
+                - 🔄 Reduce position sizes
+                - 🔄 Monitor key support/resistance levels
+                """)
         else:
-            st.warning("""
-            ### ⚖️ NEUTRAL MARKET SENTIMENT
-
-            **Recommended Actions:**
-            - 🔄 Wait for clear directional bias
-            - 🔄 Focus on range-bound strategies
-            - 🔄 Reduce position sizes
-            - 🔄 Monitor key support/resistance levels
-            """)
+            st.info("⚠️ No option chain data available. Please fetch data using the button above.")
 
         st.divider()
 
