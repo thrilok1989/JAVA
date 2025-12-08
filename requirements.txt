@@ -6,3 +6,6 @@ pytz
 plotly
 requests
 streamlit-autorefresh
+aiohttp
+yfinance
+groq
