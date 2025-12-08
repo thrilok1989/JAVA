@@ -1298,319 +1298,50 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 st.dataframe(tech_df, use_container_width=True, hide_index=True)
 
     # ─────────────────────────────────────────────────────────────────
-    # 3. PCR ANALYSIS TABLE
+    # 3. NIFTY OPTION SCREENER v6.0 (SELLER'S PERSPECTIVE + MOMENT DETECTOR)
     # ─────────────────────────────────────────────────────────────────
-    if 'PCR Analysis' in sources:
-        source_data = sources['PCR Analysis']
-        with st.expander("**📊 PCR Analysis (Put-Call Ratio)**", expanded=True):
-            bias = source_data.get('bias', 'NEUTRAL')
-            score = source_data.get('score', 0)
-            confidence = source_data.get('confidence', 0)
+    st.markdown("---")
+    with st.expander("**🎯 Nifty Option Screener v6.0 - Seller's Perspective + Moment Detector**", expanded=True):
+        st.markdown("""
+        ### 🎯 NIFTY Option Chain Analysis (Seller's Perspective)
 
-            # Color based on bias
-            if bias == 'BULLISH':
-                bg_color = '#00ff88'
-                text_color = 'black'
-                icon = '🐂'
-            elif bias == 'BEARISH':
-                bg_color = '#ff4444'
-                text_color = 'white'
-                icon = '🐻'
-            else:
-                bg_color = '#ffa500'
-                text_color = 'white'
-                icon = '⚖️'
+        **100% SELLER'S PERSPECTIVE + MOMENT DETECTOR + AI ANALYSIS + EXPIRY SPIKE DETECTOR**
 
-            # Display source card
-            col1, col2, col3 = st.columns([2, 1, 1])
+        All interpretations from Option Seller/Market Maker viewpoint:
+        - **CALL building** = BEARISH (sellers selling calls, expecting price to stay below)
+        - **PUT building** = BULLISH (sellers selling puts, expecting price to stay above)
+        """)
 
-            with col1:
-                st.markdown(f"""
-                <div style='background: {bg_color}; padding: 15px; border-radius: 10px;'>
-                    <h3 style='margin: 0; color: {text_color};'>{icon} {bias}</h3>
-                </div>
-                """, unsafe_allow_html=True)
+        try:
+            from nifty_option_screener_v6 import render_nifty_option_screener_v6
 
-            with col2:
-                st.metric("Score", f"{score:+.1f}")
+            # Render the comprehensive Nifty Option Screener v6.0
+            render_nifty_option_screener_v6()
 
-            with col3:
-                st.metric("Confidence", f"{confidence:.1f}%")
+        except ImportError as e:
+            st.error(f"❌ Failed to load Nifty Option Screener v6.0: {e}")
+            st.info("""
+            ### ⚙️ Setup Instructions:
 
-            st.markdown(f"""
-            **Bullish Instruments:** {source_data.get('bullish_instruments', 0)} | **Bearish:** {source_data.get('bearish_instruments', 0)} | **Neutral:** {source_data.get('neutral_instruments', 0)}
-            **Total Analyzed:** {source_data.get('total_instruments', 0)}
+            1. Ensure `nifty_option_screener_v6.py` is in the project directory
+            2. Add required credentials to `.streamlit/secrets.toml`:
+
+            ```toml
+            DHAN_CLIENT_ID = "your_dhan_client_id"
+            DHAN_ACCESS_TOKEN = "your_dhan_access_token"
+
+            # Optional for advanced features:
+            SUPABASE_URL = "your_supabase_url"
+            SUPABASE_ANON_KEY = "your_supabase_key"
+            TELEGRAM_BOT_TOKEN = "your_telegram_token"
+            TELEGRAM_CHAT_ID = "your_chat_id"
+            PERPLEXITY_API_KEY = "your_perplexity_key"
+            ENABLE_AI_ANALYSIS = "true"
+            ```
             """)
-
-            # PCR Details Table
-            pcr_details = source_data.get('pcr_details', [])
-            if pcr_details:
-                pcr_df = pd.DataFrame(pcr_details)
-                st.dataframe(pcr_df, use_container_width=True, hide_index=True)
-
-    # ─────────────────────────────────────────────────────────────────
-    # 3.5 NIFTY ADVANCED METRICS (NEW SECTION)
-    # ─────────────────────────────────────────────────────────────────
-    if 'NIFTY Advanced Metrics' in sources:
-        source_data = sources['NIFTY Advanced Metrics']
-        with st.expander("**🌐 NIFTY Advanced Metrics (ATM Zone & Market Analysis)**", expanded=True):
-            bias = source_data.get('bias', 'NEUTRAL')
-            score = source_data.get('score', 0)
-            confidence = source_data.get('confidence', 0)
-
-            # Color based on bias
-            if bias == 'BULLISH':
-                bg_color = '#00ff88'
-                text_color = 'black'
-                icon = '🐂'
-            elif bias == 'BEARISH':
-                bg_color = '#ff4444'
-                text_color = 'white'
-                icon = '🐻'
-            else:
-                bg_color = '#ffa500'
-                text_color = 'white'
-                icon = '⚖️'
-
-            # Display source card
-            col1, col2, col3 = st.columns([2, 1, 1])
-
-            with col1:
-                st.markdown(f"""
-                <div style='background: {bg_color}; padding: 15px; border-radius: 10px;'>
-                    <h3 style='margin: 0; color: {text_color};'>{icon} {bias}</h3>
-                </div>
-                """, unsafe_allow_html=True)
-
-            with col2:
-                st.metric("Score", f"{score:+.1f}")
-
-            with col3:
-                st.metric("Confidence", f"{confidence:.1f}%")
-
-            # Get metrics
-            metrics = source_data.get('metrics', {})
-
-            # ═══════════════════════════════════════════════════════════════════
-            # NIFTY ATM ZONE SUMMARY
-            # ═══════════════════════════════════════════════════════════════════
-            st.markdown("#### 📍 NIFTY ATM Zone Summary")
-
-            atm_strike = metrics.get('ATM Strike', 'N/A')
-            st.markdown(f"**Strike: {atm_strike}**")
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            # 1. Synthetic Future Bias
-            with col1:
-                synthetic_bias = metrics.get('Synthetic Future Bias', 'Neutral')
-                synthetic_future = metrics.get('synthetic_future', 0)
-                synthetic_diff = metrics.get('synthetic_diff', 0)
-
-                if 'BULLISH' in str(synthetic_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #00ff88;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Synthetic Future Bias</p>
-                        <h4 style='margin: 5px 0; color: #00ff88;'>🟢 Bullish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Synth: {synthetic_future:.2f} | Diff: {synthetic_diff:+.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif 'BEARISH' in str(synthetic_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ff4444;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Synthetic Future Bias</p>
-                        <h4 style='margin: 5px 0; color: #ff4444;'>🔴 Bearish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Synth: {synthetic_future:.2f} | Diff: {synthetic_diff:+.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ffa500;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Synthetic Future Bias</p>
-                        <h4 style='margin: 5px 0; color: #ffa500;'>🟡 Neutral</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Synth: {synthetic_future:.2f} | Diff: {synthetic_diff:+.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # 2. ATM Buildup Pattern
-            with col2:
-                atm_buildup = metrics.get('ATM Buildup Pattern', 'Neutral')
-
-                if 'SHORT BUILDUP' in str(atm_buildup).upper() or 'PUT WRITING' in str(atm_buildup).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #00ff88;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Buildup Pattern</p>
-                        <h4 style='margin: 5px 0; color: #00ff88;'>🟢</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>{atm_buildup}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif 'LONG BUILDUP' in str(atm_buildup).upper() or 'CALL WRITING' in str(atm_buildup).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ff4444;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Buildup Pattern</p>
-                        <h4 style='margin: 5px 0; color: #ff4444;'>🔴</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>{atm_buildup}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ffa500;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Buildup Pattern</p>
-                        <h4 style='margin: 5px 0; color: #ffa500;'>🟡</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>{atm_buildup}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # 3. ATM Vega Bias
-            with col3:
-                atm_vega_bias = metrics.get('ATM Vega Bias', 'Neutral')
-                atm_vega_exposure = metrics.get('atm_vega_exposure', 0)
-
-                if 'BULLISH' in str(atm_vega_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #00ff88;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #00ff88;'>🟢 Bullish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>High Put Vega | Exp: {atm_vega_exposure:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif 'BEARISH' in str(atm_vega_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ff4444;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #ff4444;'>🔴 Bearish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>High Call Vega | Exp: {atm_vega_exposure:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ffa500;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>ATM Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #ffa500;'>🟡 Neutral</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Exp: {atm_vega_exposure:,.2f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # 4. Distance from Max Pain
-            with col4:
-                distance_from_max_pain = metrics.get('distance_from_max_pain_value', 0)
-                max_pain_strike = metrics.get('Max Pain Strike', 'N/A')
-
-                if distance_from_max_pain > 50:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ff4444;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Distance from Max Pain</p>
-                        <h4 style='margin: 5px 0; color: #ff4444;'>🔴 {distance_from_max_pain:+.2f}</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Max Pain: {max_pain_strike}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif distance_from_max_pain < -50:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #00ff88;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Distance from Max Pain</p>
-                        <h4 style='margin: 5px 0; color: #00ff88;'>🟢 {distance_from_max_pain:+.2f}</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Max Pain: {max_pain_strike}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ffa500;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Distance from Max Pain</p>
-                        <h4 style='margin: 5px 0; color: #ffa500;'>🟡 {distance_from_max_pain:+.2f}</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Max Pain: {max_pain_strike}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            st.markdown("---")
-
-            # ═══════════════════════════════════════════════════════════════════
-            # NIFTY OVERALL MARKET ANALYSIS
-            # ═══════════════════════════════════════════════════════════════════
-            st.markdown("#### 🌐 NIFTY Overall Market Analysis")
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            # 1. Max Pain Strike
-            with col1:
-                max_pain_strike = metrics.get('Max Pain Strike', 'N/A')
-                distance_from_max_pain = metrics.get('distance_from_max_pain_value', 0)
-
-                if distance_from_max_pain > 0:
-                    color = '#00ff88'
-                    icon = '🟢'
-                else:
-                    color = '#ff4444'
-                    icon = '🔴'
-
-                st.markdown(f"""
-                <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid {color};'>
-                    <p style='margin: 0; color: #888; font-size: 12px;'>Max Pain Strike</p>
-                    <h4 style='margin: 5px 0; color: {color};'>{max_pain_strike}</h4>
-                    <p style='margin: 0; color: #ccc; font-size: 14px;'>{icon} Distance: {distance_from_max_pain:+.2f}</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # 2. Call Resistance (OI)
-            with col2:
-                call_resistance = metrics.get('Call Resistance', 'N/A')
-                call_resistance_distance = metrics.get('call_resistance_distance', 0)
-
-                st.markdown(f"""
-                <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #6495ED;'>
-                    <p style='margin: 0; color: #888; font-size: 12px;'>Call Resistance (OI)</p>
-                    <h4 style='margin: 5px 0; color: #6495ED;'>{call_resistance}</h4>
-                    <p style='margin: 0; color: #ccc; font-size: 14px;'>📈 +{call_resistance_distance:.2f} points away</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # 3. Put Support (OI)
-            with col3:
-                put_support = metrics.get('Put Support', 'N/A')
-                put_support_distance = metrics.get('put_support_distance', 0)
-
-                st.markdown(f"""
-                <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #6495ED;'>
-                    <p style='margin: 0; color: #888; font-size: 12px;'>Put Support (OI)</p>
-                    <h4 style='margin: 5px 0; color: #6495ED;'>{put_support}</h4>
-                    <p style='margin: 0; color: #ccc; font-size: 14px;'>📉 -{put_support_distance:.2f} points away</p>
-                </div>
-                """, unsafe_allow_html=True)
-
-            # 4. Total Vega Bias
-            with col4:
-                total_vega_bias = metrics.get('Total Vega Bias', 'Neutral')
-
-                if 'BULLISH' in str(total_vega_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #00ff88;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Total Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #00ff88;'>🟢 Bullish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Put Heavy</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                elif 'BEARISH' in str(total_vega_bias).upper():
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ff4444;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Total Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #ff4444;'>🔴 Bearish</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Call Heavy</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown(f"""
-                    <div style='padding: 15px; background: #1e1e1e; border-radius: 10px; border-left: 4px solid #ffa500;'>
-                        <p style='margin: 0; color: #888; font-size: 12px;'>Total Vega Bias</p>
-                        <h4 style='margin: 5px 0; color: #ffa500;'>🟡 Neutral</h4>
-                        <p style='margin: 0; color: #ccc; font-size: 14px;'>Balanced</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-            # Display detailed breakdown
-            st.markdown("---")
-            st.markdown("**Sentiment Breakdown:**")
-            details = source_data.get('details', [])
-            for detail in details:
-                st.markdown(f"- {detail}")
+        except Exception as e:
+            st.error(f"❌ Error rendering Nifty Option Screener: {e}")
+            st.exception(e)
 
     # ─────────────────────────────────────────────────────────────────
     # 6. AI MARKET ANALYSIS (NEW SECTION)
