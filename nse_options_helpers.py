@@ -18,12 +18,25 @@ import requests
 from market_hours_scheduler import scheduler, is_within_trading_hours
 
 # === Telegram Config ===
-TELEGRAM_BOT_TOKEN = "8133685842:AAGdHCpi9QRIsS-fWW5Y1AJvS95QL9xU"
-TELEGRAM_CHAT_ID = "57096584"
+# Telegram credentials now loaded from Streamlit secrets via config.py
+from config import get_telegram_credentials
 
 def send_telegram_message(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    """Send Telegram message using credentials from config.py"""
+    telegram_creds = get_telegram_credentials()
+
+    # Check if Telegram is enabled and credentials are available
+    if not telegram_creds.get('enabled', False):
+        return  # Silently skip if Telegram is not configured
+
+    bot_token = telegram_creds.get('bot_token')
+    chat_id = telegram_creds.get('chat_id')
+
+    if not bot_token or not chat_id:
+        return  # Silently skip if credentials are missing
+
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    data = {"chat_id": chat_id, "text": message}
     try:
         response = requests.post(url, data=data)
         if response.status_code != 200:
