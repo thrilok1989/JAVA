@@ -1,7 +1,0 @@
-nifty-dashboard/
-├── index.html
-├── package.json
-├── netlify.toml
-└── api/
-    ├── market-data.js
-    └── generate-decision.js
