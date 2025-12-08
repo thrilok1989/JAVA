@@ -17,7 +17,7 @@ from datetime import datetime
 import time
 import asyncio
 from market_hours_scheduler import is_within_trading_hours, scheduler
-from overall_market_sentiment_adapter import run_ai_analysis, shutdown_ai_engine
+from ai_analysis_adapter import run_ai_analysis, shutdown_ai_engine
 
 
 def calculate_stock_performance_sentiment(stock_data):
