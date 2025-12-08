@@ -1,0 +1,1573 @@
+"""
+NSE Options Analyzer Helper Functions
+This module contains all helper functions for the NSE Options Analyzer
+"""
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import math
+from scipy.stats import norm
+from datetime import datetime
+import pytz
+from config import IST, get_current_time_ist
+from pytz import timezone
+import plotly.graph_objects as go
+import io
+import requests
+from market_hours_scheduler import scheduler, is_within_trading_hours
+
+# === Telegram Config ===
+TELEGRAM_BOT_TOKEN = "8133685842:AAGdHCpi9QRIsS-fWW5Y1AJvS95QL9xU"
+TELEGRAM_CHAT_ID = "57096584"
+
+def send_telegram_message(message):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
+    try:
+        response = requests.post(url, data=data)
+        if response.status_code != 200:
+            st.warning("⚠️ Telegram message failed.")
+    except Exception as e:
+        st.error(f"❌ Telegram error: {e}")
+
+def calculate_greeks(option_type, S, K, T, r, sigma):
+    d1 = (math.log(S / K) + (r + 0.5 * sigma**2) * T) / (sigma * math.sqrt(T))
+    d2 = d1 - sigma * math.sqrt(T)
+    delta = norm.cdf(d1) if option_type == 'CE' else -norm.cdf(-d1)
+    gamma = norm.pdf(d1) / (S * sigma * math.sqrt(T))
+    vega = S * norm.pdf(d1) * math.sqrt(T) / 100
+    theta = (- (S * norm.pdf(d1) * sigma) / (2 * math.sqrt(T)) - r * K * math.exp(-r * T) * norm.cdf(d2)) / 365 if option_type == 'CE' else (- (S * norm.pdf(d1) * sigma) / (2 * math.sqrt(T)) + r * K * math.exp(-r * T) * norm.cdf(-d2)) / 365
+    rho = (K * T * math.exp(-r * T) * norm.cdf(d2)) / 100 if option_type == 'CE' else (-K * T * math.exp(-r * T) * norm.cdf(-d2)) / 100
+    return round(delta, 4), round(gamma, 4), round(vega, 4), round(theta, 4), round(rho, 4)
+
+def final_verdict(score):
+    if score >= 4:
+        return "Strong Bullish"
+    elif score >= 2:
+        return "Bullish"
+    elif score <= -4:
+        return "Strong Bearish"
+    elif score <= -2:
+        return "Bearish"
+    else:
+        return "Neutral"
+
+def delta_volume_bias(price, volume, chg_oi):
+    if price > 0 and volume > 0 and chg_oi > 0:
+        return "Bullish"
+    elif price < 0 and volume > 0 and chg_oi > 0:
+        return "Bearish"
+    elif price > 0 and volume > 0 and chg_oi < 0:
+        return "Bullish"
+    elif price < 0 and volume > 0 and chg_oi < 0:
+        return "Bearish"
+    else:
+        return "Neutral"
+
+weights = {
+    "ChgOI_Bias": 2,
+    "Volume_Bias": 1,
+    "Gamma_Bias": 1,
+    "AskQty_Bias": 1,
+    "BidQty_Bias": 1,
+    "IV_Bias": 1,
+    "DVP_Bias": 1,
+}
+
+def determine_level(row):
+    ce_oi = row['openInterest_CE']
+    pe_oi = row['openInterest_PE']
+
+    # Strong Support condition
+    if pe_oi > 1.12 * ce_oi:
+        return "Support"
+    # Strong Resistance condition
+    elif ce_oi > 1.12 * pe_oi:
+        return "Resistance"
+    # Neutral if none dominant
+    else:
+        return "Neutral"
+
+def is_in_zone(spot, strike, level, instrument, NSE_INSTRUMENTS):
+    zone_size = NSE_INSTRUMENTS['indices'].get(instrument, {}).get('zone_size', 20) or \
+                NSE_INSTRUMENTS['stocks'].get(instrument, {}).get('zone_size', 20)
+
+    if level == "Support":
+        return strike - zone_size <= spot <= strike + zone_size
+    elif level == "Resistance":
+        return strike - zone_size <= spot <= strike + zone_size
+    return False
+
+def get_support_resistance_zones(df, spot, instrument, NSE_INSTRUMENTS):
+    support_strikes = df[df['Level'] == "Support"]['strikePrice'].tolist()
+    resistance_strikes = df[df['Level'] == "Resistance"]['strikePrice'].tolist()
+
+    nearest_supports = sorted([s for s in support_strikes if s <= spot], reverse=True)[:2]
+    nearest_resistances = sorted([r for r in resistance_strikes if r >= spot])[:2]
+
+    support_zone = (min(nearest_supports), max(nearest_supports)) if len(nearest_supports) >= 2 else (nearest_supports[0], nearest_supports[0]) if nearest_supports else (None, None)
+    resistance_zone = (min(nearest_resistances), max(nearest_resistances)) if len(nearest_resistances) >= 2 else (nearest_resistances[0], nearest_resistances[0]) if nearest_resistances else (None, None)
+
+    return support_zone, resistance_zone
+
+
+def display_enhanced_trade_log(instrument, NSE_INSTRUMENTS):
+    if not st.session_state[f'{instrument}_trade_log']:
+        st.info(f"No {instrument} trades logged yet")
+        return
+    st.markdown(f"### 📜 {instrument} Trade Log")
+    df_trades = pd.DataFrame(st.session_state[f'{instrument}_trade_log'])
+
+    # Get lot size for P&L calculation
+    lot_size = NSE_INSTRUMENTS['indices'].get(instrument, {}).get('lot_size', 1) or \
+               NSE_INSTRUMENTS['stocks'].get(instrument, {}).get('lot_size', 1)
+
+    if 'Current_Price' not in df_trades.columns:
+        df_trades['Current_Price'] = df_trades['LTP'] * np.random.uniform(0.8, 1.3, len(df_trades))
+        df_trades['Unrealized_PL'] = (df_trades['Current_Price'] - df_trades['LTP']) * lot_size
+        df_trades['Status'] = df_trades['Unrealized_PL'].apply(
+            lambda x: '🟢 Profit' if x > 0 else '🔴 Loss' if x < -100 else '🟡 Breakeven'
+        )
+
+    def color_pnl(row):
+        colors = []
+        for col in row.index:
+            if col == 'Unrealized_PL':
+                if row[col] > 0:
+                    colors.append('background-color: #90EE90; color: black')
+                elif row[col] < -100:
+                    colors.append('background-color: #FFB6C1; color: black')
+                else:
+                    colors.append('background-color: #FFFFE0; color: black')
+            else:
+                colors.append('')
+        return colors
+
+    styled_trades = df_trades.style.apply(color_pnl, axis=1)
+    st.dataframe(styled_trades, use_container_width=True)
+    total_pl = df_trades['Unrealized_PL'].sum()
+    win_rate = len(df_trades[df_trades['Unrealized_PL'] > 0]) / len(df_trades) * 100
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total P&L", f"₹{total_pl:,.0f}")
+    with col2:
+        st.metric("Win Rate", f"{win_rate:.1f}%")
+    with col3:
+        st.metric("Total Trades", len(df_trades))
+
+def create_export_data(df_summary, trade_log, spot_price, instrument):
+    # Create Excel data
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_summary.to_excel(writer, sheet_name=f'{instrument}_Option_Chain', index=False)
+        if trade_log:
+            pd.DataFrame(trade_log).to_excel(writer, sheet_name=f'{instrument}_Trade_Log', index=False)
+
+    timestamp = get_current_time_ist().strftime("%Y%m%d_%H%M%S")
+    filename = f"{instrument.lower()}_analysis_{timestamp}.xlsx"
+
+    return output.getvalue(), filename
+
+def handle_export_data(df_summary, spot_price, instrument):
+    if st.button(f"Prepare {instrument} Excel Export"):
+        try:
+            excel_data, filename = create_export_data(df_summary, st.session_state[f'{instrument}_trade_log'], spot_price, instrument)
+            st.download_button(
+                label=f"📥 Download {instrument} Excel Report",
+                data=excel_data,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+            st.success(f"✅ {instrument} export ready! Click the download button above.")
+        except Exception as e:
+            st.error(f"❌ {instrument} export failed: {e}")
+
+def plot_price_with_sr(instrument):
+    price_df = st.session_state[f'{instrument}_price_data'].copy()
+    if price_df.empty or price_df['Spot'].isnull().all():
+        st.info(f"Not enough {instrument} data to show price action chart yet.")
+        return
+
+    price_df['Time'] = pd.to_datetime(price_df['Time'])
+    support_zone = st.session_state.get(f'{instrument}_support_zone', (None, None))
+    resistance_zone = st.session_state.get(f'{instrument}_resistance_zone', (None, None))
+
+    fig = go.Figure()
+
+    # Main price line
+    fig.add_trace(go.Scatter(
+        x=price_df['Time'],
+        y=price_df['Spot'],
+        mode='lines+markers',
+        name='Spot Price',
+        line=dict(color='blue', width=2)
+    ))
+
+    # Support zone
+    if all(support_zone) and None not in support_zone:
+        fig.add_shape(
+            type="rect",
+            xref="paper", yref="y",
+            x0=0, x1=1,
+            y0=support_zone[0], y1=support_zone[1],
+            fillcolor="rgba(0,255,0,0.08)",
+            line=dict(width=0),
+            layer="below"
+        )
+        fig.add_trace(go.Scatter(
+            x=[price_df['Time'].min(), price_df['Time'].max()],
+            y=[support_zone[0], support_zone[0]],
+            mode='lines',
+            name='Support Low',
+            line=dict(color='green', dash='dash')
+        ))
+        fig.add_trace(go.Scatter(
+            x=[price_df['Time'].min(), price_df['Time'].max()],
+            y=[support_zone[1], support_zone[1]],
+            mode='lines',
+            name='Support High',
+            line=dict(color='green', dash='dot')
+        ))
+
+    # Resistance zone
+    if all(resistance_zone) and None not in resistance_zone:
+        fig.add_shape(
+            type="rect",
+            xref="paper", yref="y",
+            x0=0, x1=1,
+            y0=resistance_zone[0], y1=resistance_zone[1],
+            fillcolor="rgba(255,0,0,0.08)",
+            line=dict(width=0),
+            layer="below"
+        )
+        fig.add_trace(go.Scatter(
+            x=[price_df['Time'].min(), price_df['Time'].max()],
+            y=[resistance_zone[0], resistance_zone[0]],
+            mode='lines',
+            name='Resistance Low',
+            line=dict(color='red', dash='dash')
+        ))
+        fig.add_trace(go.Scatter(
+            x=[price_df['Time'].min(), price_df['Time'].max()],
+            y=[resistance_zone[1], resistance_zone[1]],
+            mode='lines',
+            name='Resistance High',
+            line=dict(color='red', dash='dot')
+        ))
+
+    # Layout configuration
+    fig.update_layout(
+        title=f"{instrument} Spot Price Action with Support & Resistance",
+        xaxis_title="Time",
+        yaxis_title="Spot Price",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+def auto_update_call_log(current_price, instrument):
+    for call in st.session_state[f'{instrument}_call_log_book']:
+        if call["Status"] != "Active":
+            continue
+        if call["Type"] == "CE":
+            if current_price >= max(call["Targets"].values()):
+                call["Status"] = "Hit Target"
+                call["Hit_Target"] = True
+                call["Exit_Time"] = datetime.now(timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                call["Exit_Price"] = current_price
+            elif current_price <= call["Stoploss"]:
+                call["Status"] = "Hit Stoploss"
+                call["Hit_Stoploss"] = True
+                call["Exit_Time"] = datetime.now(timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                call["Exit_Price"] = current_price
+        elif call["Type"] == "PE":
+            if current_price <= min(call["Targets"].values()):
+                call["Status"] = "Hit Target"
+                call["Hit_Target"] = True
+                call["Exit_Time"] = datetime.now(timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                call["Exit_Price"] = current_price
+            elif current_price >= call["Stoploss"]:
+                call["Status"] = "Hit Stoploss"
+                call["Hit_Stoploss"] = True
+                call["Exit_Time"] = datetime.now(timezone("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S")
+                call["Exit_Price"] = current_price
+
+def display_call_log_book(instrument):
+    st.markdown(f"### 📚 {instrument} Call Log Book")
+    if not st.session_state[f'{instrument}_call_log_book']:
+        st.info(f"No {instrument} calls have been made yet.")
+        return
+
+    df_log = pd.DataFrame(st.session_state[f'{instrument}_call_log_book'])
+    st.dataframe(df_log, use_container_width=True)
+
+    if st.button(f"Download {instrument} Call Log Book as CSV"):
+        st.download_button(
+            label="Download CSV",
+            data=df_log.to_csv(index=False).encode(),
+            file_name=f"{instrument.lower()}_call_log_book.csv",
+            mime="text/csv"
+        )
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_option_chain_data(instrument, NSE_INSTRUMENTS):
+    """Fetch and return option chain data for an instrument - Cached for 60 seconds"""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        session = requests.Session()
+        session.headers.update(headers)
+        session.get("https://www.nseindia.com", timeout=5)
+
+        # Handle spaces in instrument names
+        url_instrument = instrument.replace(' ', '%20')
+        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={url_instrument}" if instrument in NSE_INSTRUMENTS['indices'] else \
+              f"https://www.nseindia.com/api/option-chain-equities?symbol={url_instrument}"
+
+        response = session.get(url, timeout=10)
+        data = response.json()
+
+        records = data['records']['data']
+        expiry = data['records']['expiryDates'][0]
+        underlying = data['records']['underlyingValue']
+
+        # Calculate totals
+        total_ce_oi = sum(item['CE']['openInterest'] for item in records if 'CE' in item)
+        total_pe_oi = sum(item['PE']['openInterest'] for item in records if 'PE' in item)
+        total_ce_change = sum(item['CE']['changeinOpenInterest'] for item in records if 'CE' in item)
+        total_pe_change = sum(item['PE']['changeinOpenInterest'] for item in records if 'PE' in item)
+
+        return {
+            'success': True,
+            'instrument': instrument,
+            'spot': underlying,
+            'expiry': expiry,
+            'total_ce_oi': total_ce_oi,
+            'total_pe_oi': total_pe_oi,
+            'total_ce_change': total_ce_change,
+            'total_pe_change': total_pe_change,
+            'records': records
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'instrument': instrument,
+            'error': str(e)
+        }
+
+def analyze_instrument(instrument, NSE_INSTRUMENTS):
+    try:
+        # Check if market is within trading hours using centralized scheduler
+        if not is_within_trading_hours():
+            status = scheduler.get_market_status()
+            st.warning(f"⏳ Market Closed - Trading Hours: 8:30 AM - 3:45 PM IST (Mon-Fri)")
+            return
+
+        headers = {"User-Agent": "Mozilla/5.0"}
+        session = requests.Session()
+        session.headers.update(headers)
+        session.get("https://www.nseindia.com", timeout=5)
+
+        # Handle spaces in instrument names
+        url_instrument = instrument.replace(' ', '%20')
+        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={url_instrument}" if instrument in NSE_INSTRUMENTS['indices'] else \
+              f"https://www.nseindia.com/api/option-chain-equities?symbol={url_instrument}"
+
+        response = session.get(url, timeout=10)
+        data = response.json()
+
+        records = data['records']['data']
+        expiry = data['records']['expiryDates'][0]
+        underlying = data['records']['underlyingValue']
+
+        # === Open Interest Change Comparison ===
+        total_ce_change = sum(item['CE']['changeinOpenInterest'] for item in records if 'CE' in item) / 100000
+        total_pe_change = sum(item['PE']['changeinOpenInterest'] for item in records if 'PE' in item) / 100000
+
+        st.markdown(f"## 📊 {instrument} Open Interest Change (Lakhs)")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("📉 CALL Δ OI",
+                     f"{total_ce_change:+.1f}L",
+                     delta_color="inverse")
+
+        with col2:
+            st.metric("📈 PUT Δ OI",
+                     f"{total_pe_change:+.1f}L",
+                     delta_color="normal")
+
+        # Dominance indicator
+        if total_ce_change > total_pe_change:
+            st.error(f"🚨 Call OI Dominance (Difference: {abs(total_ce_change - total_pe_change):.1f}L)")
+        elif total_pe_change > total_ce_change:
+            st.success(f"🚀 Put OI Dominance (Difference: {abs(total_pe_change - total_ce_change):.1f}L)")
+        else:
+            st.info("⚖️ OI Changes Balanced")
+
+        today = datetime.now(timezone("Asia/Kolkata"))
+        expiry_date = timezone("Asia/Kolkata").localize(datetime.strptime(expiry, "%d-%b-%Y"))
+
+        # Calculate time to expiry
+        T = max((expiry_date - today).days, 1) / 365
+        r = 0.06
+
+        # Store current time for logging
+        now = datetime.now(timezone("Asia/Kolkata"))
+
+        calls, puts = [], []
+
+        for item in records:
+            if 'CE' in item and item['CE']['expiryDate'] == expiry:
+                ce = item['CE']
+                if ce['impliedVolatility'] > 0:
+                    greeks = calculate_greeks('CE', underlying, ce['strikePrice'], T, r, ce['impliedVolatility'] / 100)
+                    ce.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                calls.append(ce)
+
+            if 'PE' in item and item['PE']['expiryDate'] == expiry:
+                pe = item['PE']
+                if pe['impliedVolatility'] > 0:
+                    greeks = calculate_greeks('PE', underlying, pe['strikePrice'], T, r, pe['impliedVolatility'] / 100)
+                    pe.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                puts.append(pe)
+
+        df_ce = pd.DataFrame(calls)
+        df_pe = pd.DataFrame(puts)
+        df = pd.merge(df_ce, df_pe, on='strikePrice', suffixes=('_CE', '_PE')).sort_values('strikePrice')
+
+        # Get instrument-specific parameters
+        atm_range = NSE_INSTRUMENTS['indices'].get(instrument, {}).get('atm_range', 200) or \
+                    NSE_INSTRUMENTS['stocks'].get(instrument, {}).get('atm_range', 200)
+
+        atm_strike = min(df['strikePrice'], key=lambda x: abs(x - underlying))
+        df = df[df['strikePrice'].between(atm_strike - atm_range, atm_strike + atm_range)]
+        df['Zone'] = df['strikePrice'].apply(lambda x: 'ATM' if x == atm_strike else 'ITM' if x < underlying else 'OTM')
+        df['Level'] = df.apply(determine_level, axis=1)
+
+        bias_results, total_score = [], 0
+        # Calculate Delta and Gamma Exposures
+        total_delta_exposure = 0
+        total_gamma_exposure = 0
+
+        for _, row in df.iterrows():
+            # Calculate exposures for all strikes (not just near ATM)
+            ce_delta_exp = row['Delta_CE'] * row['openInterest_CE']
+            pe_delta_exp = row['Delta_PE'] * row['openInterest_PE']
+            ce_gamma_exp = row['Gamma_CE'] * row['openInterest_CE']
+            pe_gamma_exp = row['Gamma_PE'] * row['openInterest_PE']
+
+            total_delta_exposure += (ce_delta_exp + pe_delta_exp)
+            total_gamma_exposure += (ce_gamma_exp + pe_gamma_exp)
+
+        for _, row in df.iterrows():
+            if abs(row['strikePrice'] - atm_strike) > (atm_range/2):  # Only consider strikes near ATM
+                continue
+
+            score = 0
+
+            # Calculate per-strike delta and gamma exposure
+            ce_delta_exp = row['Delta_CE'] * row['openInterest_CE']
+            pe_delta_exp = row['Delta_PE'] * row['openInterest_PE']
+            ce_gamma_exp = row['Gamma_CE'] * row['openInterest_CE']
+            pe_gamma_exp = row['Gamma_PE'] * row['openInterest_PE']
+
+            # Calculate net exposures
+            net_delta_exp = ce_delta_exp + pe_delta_exp
+            net_gamma_exp = ce_gamma_exp + pe_gamma_exp
+
+            # Calculate per-strike IV skew
+            strike_iv_skew = row['impliedVolatility_PE'] - row['impliedVolatility_CE']
+
+            # Determine bias for each metric
+            delta_exp_bias = "Bullish" if net_delta_exp > 0 else "Bearish" if net_delta_exp < 0 else "Neutral"
+            gamma_exp_bias = "Bullish" if net_gamma_exp > 0 else "Bearish" if net_gamma_exp < 0 else "Neutral"
+            iv_skew_bias = "Bullish" if strike_iv_skew > 0 else "Bearish" if strike_iv_skew < 0 else "Neutral"
+
+            row_data = {
+                "Strike": row['strikePrice'],
+                "Zone": row['Zone'],
+                "Level": row['Level'],
+                "ChgOI_Bias": "Bullish" if row['changeinOpenInterest_CE'] < row['changeinOpenInterest_PE'] else "Bearish",
+                "Volume_Bias": "Bullish" if row['totalTradedVolume_CE'] < row['totalTradedVolume_PE'] else "Bearish",
+                "Delta_Bias": "Bullish" if abs(row['Delta_PE']) > abs(row['Delta_CE']) else "Bearish",
+                "Gamma_Bias": "Bullish" if row['Gamma_CE'] < row['Gamma_PE'] else "Bearish",
+                "AskQty_Bias": "Bullish" if row['askQty_PE'] > row['askQty_CE'] else "Bearish",
+                "BidQty_Bias": "Bearish" if row['bidQty_PE'] > row['bidQty_CE'] else "Bullish",
+                "IV_Bias": "Bullish" if row['impliedVolatility_CE'] > row['impliedVolatility_PE'] else "Bearish",
+                "DVP_Bias": delta_volume_bias(
+                    row['lastPrice_CE'] - row['lastPrice_PE'],
+                    row['totalTradedVolume_CE'] - row['totalTradedVolume_PE'],
+                    row['changeinOpenInterest_CE'] - row['changeinOpenInterest_PE']
+                ),
+                "Delta_Exposure_Bias": delta_exp_bias,
+                "Gamma_Exposure_Bias": gamma_exp_bias,
+                "IV_Skew_Bias": iv_skew_bias
+            }
+
+            for k in row_data:
+                if "_Bias" in k:
+                    bias = row_data[k]
+                    score += weights.get(k, 1) if bias == "Bullish" else -weights.get(k, 1)
+
+            row_data["BiasScore"] = score
+            row_data["Verdict"] = final_verdict(score)
+            total_score += score
+            bias_results.append(row_data)
+
+        df_summary = pd.DataFrame(bias_results)
+        atm_row = df_summary[df_summary["Zone"] == "ATM"].iloc[0] if not df_summary[df_summary["Zone"] == "ATM"].empty else None
+        market_view = atm_row['Verdict'] if atm_row is not None else "Neutral"
+
+        # Calculate IV Skew (ATM)
+        atm_ce_iv = df.loc[df['strikePrice'] == atm_strike, 'impliedVolatility_CE'].values[0] if not df[df['strikePrice'] == atm_strike].empty else 0
+        atm_pe_iv = df.loc[df['strikePrice'] == atm_strike, 'impliedVolatility_PE'].values[0] if not df[df['strikePrice'] == atm_strike].empty else 0
+        iv_skew = atm_pe_iv - atm_ce_iv
+
+        # Determine Delta Bias based on net delta exposure
+        delta_bias_overall = "Bullish" if total_delta_exposure > 0 else "Bearish" if total_delta_exposure < 0 else "Neutral"
+
+        # === Calculate ATM-Specific Metrics ===
+        # Get ATM row data
+        atm_df = df[df['strikePrice'] == atm_strike]
+        if not atm_df.empty:
+            atm_ce_price = atm_df['lastPrice_CE'].values[0]
+            atm_pe_price = atm_df['lastPrice_PE'].values[0]
+            atm_ce_oi = atm_df['openInterest_CE'].values[0]
+            atm_pe_oi = atm_df['openInterest_PE'].values[0]
+            atm_ce_change = atm_df['changeinOpenInterest_CE'].values[0]
+            atm_pe_change = atm_df['changeinOpenInterest_PE'].values[0]
+            atm_ce_vega = atm_df['Vega_CE'].values[0]
+            atm_pe_vega = atm_df['Vega_PE'].values[0]
+
+            # 1. Synthetic Future Bias
+            synthetic_bias, synthetic_future, synthetic_diff = calculate_synthetic_future_bias(
+                atm_ce_price, atm_pe_price, atm_strike, underlying
+            )
+
+            # 2. ATM Buildup Pattern
+            atm_buildup = calculate_atm_buildup_pattern(atm_ce_oi, atm_pe_oi, atm_ce_change, atm_pe_change)
+
+            # 3. ATM Vega Bias
+            atm_vega_bias, atm_vega_exposure = calculate_atm_vega_bias(atm_ce_vega, atm_pe_vega, atm_ce_oi, atm_pe_oi)
+
+            # 4. Max Pain and Distance from Max Pain
+            max_pain_strike = calculate_max_pain(df)
+            distance_from_max_pain = underlying - max_pain_strike if max_pain_strike else 0
+        else:
+            synthetic_bias, synthetic_future, synthetic_diff = "N/A", 0, 0
+            atm_buildup = "N/A"
+            atm_vega_bias, atm_vega_exposure = "N/A", 0
+            max_pain_strike = None
+            distance_from_max_pain = 0
+
+        # === Calculate Overall Market Metrics ===
+        # Find Call Resistance and Put Support
+        call_resistance, put_support = find_call_resistance_put_support(df, underlying)
+
+        # Total Vega Bias
+        total_vega_bias, total_vega, total_ce_vega_exp, total_pe_vega_exp = calculate_total_vega_bias(df)
+
+        # Unusual Activity
+        unusual_activity = detect_unusual_activity(df, underlying)
+
+        # Overall Buildup Pattern
+        overall_buildup = calculate_overall_buildup_pattern(df, underlying)
+
+        # === Store Comprehensive Metrics in Session State ===
+        # Calculate distance from Call Resistance and Put Support
+        call_resistance_distance = call_resistance - underlying if call_resistance else 0
+        put_support_distance = underlying - put_support if put_support else 0
+
+        st.session_state[f'{instrument}_comprehensive_metrics'] = {
+            'Instrument': instrument,
+            'Spot': f"₹{underlying:,.2f}",
+            'ATM Strike': atm_strike,
+            'Synthetic Future Bias': synthetic_bias,
+            'ATM Buildup Pattern': atm_buildup,
+            'ATM Vega Bias': atm_vega_bias.split('(')[0].strip() if isinstance(atm_vega_bias, str) else atm_vega_bias,
+            'Distance from Max Pain': f"{distance_from_max_pain:+.2f}" if max_pain_strike else 'N/A',
+            'Max Pain Strike': max_pain_strike if max_pain_strike else 'N/A',
+            'Call Resistance': call_resistance if call_resistance else 'N/A',
+            'Put Support': put_support if put_support else 'N/A',
+            'Total Vega Bias': total_vega_bias.split('(')[0].strip(),
+            'Overall Buildup': overall_buildup,
+            'Unusual Activity Count': len(unusual_activity),
+            # Raw values for detailed display
+            'synthetic_future': synthetic_future,
+            'synthetic_diff': synthetic_diff,
+            'atm_vega_exposure': atm_vega_exposure,
+            'call_resistance_distance': call_resistance_distance,
+            'put_support_distance': put_support_distance,
+            'underlying_value': underlying,
+            'distance_from_max_pain_value': distance_from_max_pain
+        }
+
+        support_zone, resistance_zone = get_support_resistance_zones(df, underlying, instrument, NSE_INSTRUMENTS)
+
+        # Store zones in session state
+        st.session_state[f'{instrument}_support_zone'] = support_zone
+        st.session_state[f'{instrument}_resistance_zone'] = resistance_zone
+
+        current_time_str = now.strftime("%H:%M:%S")
+        new_row = pd.DataFrame([[current_time_str, underlying]], columns=["Time", "Spot"])
+        st.session_state[f'{instrument}_price_data'] = pd.concat([st.session_state[f'{instrument}_price_data'], new_row], ignore_index=True)
+
+        support_str = f"{support_zone[1]} to {support_zone[0]}" if all(support_zone) else "N/A"
+        resistance_str = f"{resistance_zone[0]} to {resistance_zone[1]}" if all(resistance_zone) else "N/A"
+
+        atm_signal, suggested_trade = "No Signal", ""
+        signal_sent = False
+
+        for row in bias_results:
+            if not is_in_zone(underlying, row['Strike'], row['Level'], instrument, NSE_INSTRUMENTS):
+                continue
+
+            if row['Level'] == "Support" and total_score >= 4 and "Bullish" in market_view:
+                option_type = 'CE'
+            elif row['Level'] == "Resistance" and total_score <= -4 and "Bearish" in market_view:
+                option_type = 'PE'
+            else:
+                continue
+
+            ltp = df.loc[df['strikePrice'] == row['Strike'], f'lastPrice_{option_type}'].values[0]
+            iv = df.loc[df['strikePrice'] == row['Strike'], f'impliedVolatility_{option_type}'].values[0]
+            target = round(ltp * (1 + iv / 100), 2)
+            stop_loss = round(ltp * 0.8, 2)
+
+            atm_signal = f"{'CALL' if option_type == 'CE' else 'PUT'} Entry (Bias Based at {row['Level']})"
+            suggested_trade = f"Strike: {row['Strike']} {option_type} @ ₹{ltp} | 🎯 Target: ₹{target} | 🛑 SL: ₹{stop_loss}"
+
+            send_telegram_message(
+                f"📍 {instrument} Spot: {underlying}\n"
+                f"🔹 {atm_signal}\n"
+                f"{suggested_trade}\n"
+                f"Bias Score (ATM ±2): {total_score} ({market_view})\n"
+                f"Level: {row['Level']}\n"
+                f"📉 Support Zone: {support_str}\n"
+                f"📈 Resistance Zone: {resistance_str}\n"
+                f"Biases:\n"
+                f"Strike: {row['Strike']}\n"
+                f"ChgOI: {row['ChgOI_Bias']}, Volume: {row['Volume_Bias']}, Gamma: {row['Gamma_Bias']},\n"
+                f"AskQty: {row['AskQty_Bias']}, BidQty: {row['BidQty_Bias']}, IV: {row['IV_Bias']}, DVP: {row['DVP_Bias']}"
+            )
+
+            st.session_state[f'{instrument}_trade_log'].append({
+                "Time": now.strftime("%H:%M:%S"),
+                "Strike": row['Strike'],
+                "Type": option_type,
+                "LTP": ltp,
+                "Target": target,
+                "SL": stop_loss
+            })
+
+            signal_sent = True
+            break
+
+        # === Main Display ===
+        st.markdown(f"### 📍 {instrument} Spot Price: {underlying}")
+        st.success(f"🧠 {instrument} Market View: **{market_view}** Bias Score: {total_score}")
+        st.markdown(f"### 🛡️ {instrument} Support Zone: `{support_str}`")
+        st.markdown(f"### 🚧 {instrument} Resistance Zone: `{resistance_str}`")
+
+        # Display Greeks Metrics in a dedicated section
+        st.markdown("---")
+        st.markdown(f"### 🎯 {instrument} Greeks & Exposure Metrics")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            delta_color = "🟢" if delta_bias_overall == "Bullish" else "🔴" if delta_bias_overall == "Bearish" else "🟡"
+            st.metric("Delta Bias", f"{delta_color} {delta_bias_overall}")
+            st.caption(f"Exposure: {total_delta_exposure:,.0f}")
+
+        with col2:
+            st.metric("Gamma Exposure", f"{total_gamma_exposure:,.2f}")
+            st.caption("Total Gamma * OI")
+
+        with col3:
+            st.metric("Delta Exposure", f"{total_delta_exposure:,.0f}")
+            st.caption("Total Delta * OI")
+
+        with col4:
+            iv_skew_color = "🟢" if iv_skew > 0 else "🔴" if iv_skew < 0 else "🟡"
+            st.metric("IV Skew (ATM)", f"{iv_skew_color} {iv_skew:.2f}%")
+            st.caption(f"PE IV: {atm_pe_iv:.1f}% | CE IV: {atm_ce_iv:.1f}%")
+
+        st.markdown("---")
+
+        # === ATM ZONE SUMMARY ===
+        st.markdown(f"### 🎯 {instrument} ATM Zone Summary (Strike: {atm_strike})")
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            synth_color = "🟢" if "Bullish" in str(synthetic_bias) else "🔴" if "Bearish" in str(synthetic_bias) else "🟡"
+            st.metric("Synthetic Future Bias", f"{synth_color} {synthetic_bias}")
+            st.caption(f"Synth: {synthetic_future:.2f} | Diff: {synthetic_diff:+.2f}")
+
+        with col2:
+            buildup_color = "🟢" if "Bullish" in str(atm_buildup) else "🔴" if "Bearish" in str(atm_buildup) else "🟡"
+            st.metric("ATM Buildup Pattern", buildup_color)
+            st.caption(atm_buildup)
+
+        with col3:
+            vega_color = "🟢" if "Bullish" in str(atm_vega_bias) else "🔴" if "Bearish" in str(atm_vega_bias) else "🟡"
+            st.metric("ATM Vega Bias", f"{vega_color}")
+            st.caption(f"{atm_vega_bias} | Exp: {atm_vega_exposure:.2f}")
+
+        with col4:
+            mp_color = "🟢" if distance_from_max_pain > 0 else "🔴" if distance_from_max_pain < 0 else "🟡"
+            st.metric("Distance from Max Pain", f"{mp_color} {distance_from_max_pain:+.2f}")
+            st.caption(f"Max Pain: {max_pain_strike if max_pain_strike else 'N/A'}")
+
+        st.markdown("---")
+
+        # === OVERALL MARKET ANALYSIS ===
+        st.markdown(f"### 🌐 {instrument} Overall Market Analysis")
+
+        # First row
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Max Pain Strike", max_pain_strike if max_pain_strike else "N/A")
+            mp_dist_color = "🟢" if distance_from_max_pain > 0 else "🔴" if distance_from_max_pain < 0 else "🟡"
+            st.caption(f"{mp_dist_color} Distance: {distance_from_max_pain:+.2f}")
+
+        with col2:
+            st.metric("Call Resistance (OI)", call_resistance if call_resistance else "N/A")
+            if call_resistance:
+                dist_to_resistance = call_resistance - underlying
+                st.caption(f"📈 {dist_to_resistance:+.2f} points away")
+            else:
+                st.caption("No strong resistance found")
+
+        with col3:
+            st.metric("Put Support (OI)", put_support if put_support else "N/A")
+            if put_support:
+                dist_to_support = put_support - underlying
+                st.caption(f"📉 {dist_to_support:+.2f} points away")
+            else:
+                st.caption("No strong support found")
+
+        with col4:
+            vega_bias_color = "🟢" if "Bullish" in total_vega_bias else "🔴" if "Bearish" in total_vega_bias else "🟡"
+            st.metric("Total Vega Bias", f"{vega_bias_color} {total_vega_bias.split('(')[0].strip()}")
+            st.caption(f"Total: {total_vega:,.0f}")
+
+        # Second row
+        st.markdown("#### 📊 Overall Buildup Pattern")
+        buildup_pattern_color = "🟢" if "Bullish" in overall_buildup else "🔴" if "Bearish" in overall_buildup else "🟡"
+        st.info(f"{buildup_pattern_color} **{overall_buildup}**")
+
+        # Third row - Unusual Activity Alerts
+        if unusual_activity:
+            st.markdown("#### ⚠️ Unusual Activity Alerts")
+            unusual_df = pd.DataFrame(unusual_activity)
+            unusual_df['volume_oi_ratio'] = unusual_df['volume_oi_ratio'].apply(lambda x: f"{x:.2%}")
+            st.dataframe(unusual_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No unusual activity detected")
+
+        st.markdown("---")
+
+        # Display price chart
+        plot_price_with_sr(instrument)
+
+        if suggested_trade:
+            st.info(f"🔹 {atm_signal}\n{suggested_trade}")
+
+        with st.expander(f"📊 {instrument} Option Chain Summary"):
+            st.dataframe(df_summary)
+
+        if st.session_state[f'{instrument}_trade_log']:
+            st.markdown(f"### 📜 {instrument} Trade Log")
+            st.dataframe(pd.DataFrame(st.session_state[f'{instrument}_trade_log']))
+
+        # === Enhanced Functions Display ===
+        st.markdown("---")
+        st.markdown(f"## 📈 {instrument} Enhanced Features")
+
+        # Enhanced Trade Log
+        display_enhanced_trade_log(instrument, NSE_INSTRUMENTS)
+
+        # Export functionality
+        st.markdown("---")
+        st.markdown(f"### 📥 {instrument} Data Export")
+        handle_export_data(df_summary, underlying, instrument)
+
+        # Call Log Book
+        st.markdown("---")
+        display_call_log_book(instrument)
+
+        # Auto update call log with current price
+        auto_update_call_log(underlying, instrument)
+
+    except Exception as e:
+        st.error(f"❌ {instrument} Error: {e}")
+        send_telegram_message(f"❌ {instrument} Error: {str(e)}")
+def display_overall_option_chain_analysis(NSE_INSTRUMENTS):
+    """Display overall option chain analysis with PCR ratios"""
+    st.header("🌐 Overall Market Option Chain Analysis")
+    st.caption("Consolidated view of all instruments with PCR ratios and market bias")
+
+    # Fetch button
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.info("Click 'Fetch All Data' to get the latest option chain data for all instruments")
+    with col2:
+        if st.button("🔄 Fetch All Data", type="primary", use_container_width=True):
+            with st.spinner("Fetching option chain data for all instruments..."):
+                overall_data = {}
+                progress_bar = st.progress(0)
+                all_instruments = list(NSE_INSTRUMENTS['indices'].keys()) + list(NSE_INSTRUMENTS['stocks'].keys())
+
+                for idx, instrument in enumerate(all_instruments):
+                    data = fetch_option_chain_data(instrument, NSE_INSTRUMENTS)
+                    overall_data[instrument] = data
+                    progress_bar.progress((idx + 1) / len(all_instruments))
+
+                st.session_state['overall_option_data'] = overall_data
+                st.success("✅ Data fetched successfully!")
+                st.rerun()
+
+    st.divider()
+
+    # Display analysis if data is available
+    if st.session_state.get('overall_option_data'):
+        data_dict = st.session_state['overall_option_data']
+
+        # === PCR ANALYSIS SECTION ===
+        st.subheader("📊 Put-Call Ratio (PCR) Analysis")
+
+        # Create PCR data
+        pcr_data = []
+        for instrument, data in data_dict.items():
+            if data['success']:
+                # Calculate PCR for Total OI
+                pcr_oi = data['total_pe_oi'] / data['total_ce_oi'] if data['total_ce_oi'] > 0 else 0
+
+                # Calculate PCR for Change in OI
+                pcr_change_oi = abs(data['total_pe_change']) / abs(data['total_ce_change']) if data['total_ce_change'] != 0 else 0
+
+                # Determine bias based on PCR
+                if pcr_oi > 1.2:
+                    oi_bias = "🐂 Bullish"
+                elif pcr_oi < 0.8:
+                    oi_bias = "🐻 Bearish"
+                else:
+                    oi_bias = "⚖️ Neutral"
+
+                if pcr_change_oi > 1.2:
+                    change_bias = "🐂 Bullish"
+                elif pcr_change_oi < 0.8:
+                    change_bias = "🐻 Bearish"
+                else:
+                    change_bias = "⚖️ Neutral"
+
+                pcr_data.append({
+                    'Instrument': instrument,
+                    'Spot': f"₹{data['spot']:,.2f}",
+                    'Total CE OI': f"{data['total_ce_oi']:,.0f}",
+                    'Total PE OI': f"{data['total_pe_oi']:,.0f}",
+                    'PCR (OI)': f"{pcr_oi:.2f}",
+                    'OI Bias': oi_bias,
+                    'CE Δ OI': f"{data['total_ce_change']:,.0f}",
+                    'PE Δ OI': f"{data['total_pe_change']:,.0f}",
+                    'PCR (Δ OI)': f"{pcr_change_oi:.2f}",
+                    'Δ OI Bias': change_bias
+                })
+
+        # Display PCR table
+        if pcr_data:
+            pcr_df = pd.DataFrame(pcr_data)
+
+            # Color coding function
+            def color_bias_cells(val):
+                if '🐂' in str(val):
+                    return 'background-color: #90EE90; color: black; font-weight: bold'
+                elif '🐻' in str(val):
+                    return 'background-color: #FFB6C1; color: black; font-weight: bold'
+                elif '⚖️' in str(val):
+                    return 'background-color: #FFFFE0; color: black'
+                return ''
+
+            styled_pcr = pcr_df.style.applymap(color_bias_cells, subset=['OI Bias', 'Δ OI Bias'])
+            st.dataframe(styled_pcr, use_container_width=True, hide_index=True)
+
+            # PCR interpretation guide
+            with st.expander("📖 PCR Interpretation Guide"):
+                st.markdown("""
+                ### Put-Call Ratio (PCR) Interpretation
+
+                **PCR = Total PUT OI / Total CALL OI** or **PCR = Total PUT Δ OI / Total CALL Δ OI**
+
+                - **PCR > 1.2**: Bullish Signal 🐂
+                  - More PUT writing/accumulation than CALL
+                  - Market participants expect prices to go up
+
+                - **PCR < 0.8**: Bearish Signal 🐻
+                  - More CALL writing/accumulation than PUT
+                  - Market participants expect prices to go down
+
+                - **PCR between 0.8 - 1.2**: Neutral ⚖️
+                  - Balanced option activity
+                  - No clear directional bias
+
+                **Note**:
+                - **Total OI PCR** shows overall market positioning
+                - **Change in OI PCR** shows current session's sentiment
+                - Use both together for better analysis
+                """)
+
+        st.divider()
+
+        # === OVERALL MARKET BIAS ===
+        st.subheader("🎯 Overall Market Bias")
+
+        # Calculate aggregated bias
+        bullish_count = sum(1 for d in pcr_data if '🐂' in d['OI Bias'] or '🐂' in d['Δ OI Bias'])
+        bearish_count = sum(1 for d in pcr_data if '🐻' in d['OI Bias'] or '🐻' in d['Δ OI Bias'])
+        neutral_count = len(pcr_data) - bullish_count - bearish_count
+
+        total_signals = len(pcr_data) * 2  # Each instrument has 2 signals (OI + Δ OI)
+
+        # Determine overall market bias
+        if bullish_count > bearish_count and bullish_count > neutral_count:
+            overall_bias = "🐂 BULLISH"
+            bias_color = "green"
+        elif bearish_count > bullish_count and bearish_count > neutral_count:
+            overall_bias = "🐻 BEARISH"
+            bias_color = "red"
+        else:
+            overall_bias = "⚖️ NEUTRAL"
+            bias_color = "gray"
+
+        # Display overall bias
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.markdown(f"<h2 style='color:{bias_color}; text-align: center;'>{overall_bias}</h2>",
+                       unsafe_allow_html=True)
+            st.caption("Overall Market Sentiment")
+
+        with col2:
+            st.metric("Bullish Signals", bullish_count, delta=f"{(bullish_count/total_signals*100):.1f}%")
+
+        with col3:
+            st.metric("Bearish Signals", bearish_count, delta=f"{(bearish_count/total_signals*100):.1f}%", delta_color="inverse")
+
+        with col4:
+            st.metric("Neutral Signals", neutral_count)
+
+        # Market bias distribution chart
+        st.markdown("### 📊 Market Sentiment Distribution")
+
+        sentiment_data = pd.DataFrame({
+            'Sentiment': ['Bullish', 'Bearish', 'Neutral'],
+            'Count': [bullish_count, bearish_count, neutral_count]
+        })
+
+        fig = go.Figure(data=[
+            go.Bar(
+                x=sentiment_data['Sentiment'],
+                y=sentiment_data['Count'],
+                marker_color=['green', 'red', 'gray'],
+                text=sentiment_data['Count'],
+                textposition='auto'
+            )
+        ])
+
+        fig.update_layout(
+            title="Overall Market Sentiment Breakdown",
+            xaxis_title="Sentiment",
+            yaxis_title="Count",
+            template="plotly_white"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.divider()
+
+        # === DETAILED BREAKDOWN BY CATEGORY ===
+        st.subheader("📈 Category-wise Analysis")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("### 📊 Indices")
+            indices_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['indices']]
+            if indices_data:
+                indices_df = pd.DataFrame(indices_data)
+                st.dataframe(indices_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
+                           use_container_width=True, hide_index=True)
+
+        with col2:
+            st.markdown("### 🏢 Stocks")
+            stocks_data = [d for d in pcr_data if d['Instrument'] in NSE_INSTRUMENTS['stocks']]
+            if stocks_data:
+                stocks_df = pd.DataFrame(stocks_data)
+                st.dataframe(stocks_df[['Instrument', 'Spot', 'PCR (OI)', 'OI Bias', 'PCR (Δ OI)', 'Δ OI Bias']],
+                           use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        # === TRADING RECOMMENDATION ===
+        st.subheader("💡 Trading Recommendation")
+
+        if overall_bias == "🐂 BULLISH":
+            st.success("""
+            ### 🐂 BULLISH MARKET SENTIMENT DETECTED
+
+            **Recommended Actions:**
+            - ✅ Look for LONG/CALL opportunities
+            - ✅ Focus on instruments with high PUT OI accumulation
+            - ✅ Wait for support levels to enter
+            - ⚠️ Use proper stop losses
+            """)
+        elif overall_bias == "🐻 BEARISH":
+            st.error("""
+            ### 🐻 BEARISH MARKET SENTIMENT DETECTED
+
+            **Recommended Actions:**
+            - ✅ Look for SHORT/PUT opportunities
+            - ✅ Focus on instruments with high CALL OI accumulation
+            - ✅ Wait for resistance levels to enter
+            - ⚠️ Use proper stop losses
+            """)
+        else:
+            st.warning("""
+            ### ⚖️ NEUTRAL MARKET SENTIMENT
+
+            **Recommended Actions:**
+            - 🔄 Wait for clear directional bias
+            - 🔄 Focus on range-bound strategies
+            - 🔄 Reduce position sizes
+            - 🔄 Monitor key support/resistance levels
+            """)
+
+        st.divider()
+
+        # === COMPREHENSIVE MARKET ANALYSIS ===
+        st.subheader("🌐 Comprehensive Market Analysis")
+        st.caption("Deep dive into option chain metrics for all instruments")
+
+        # Calculate comprehensive metrics for each instrument
+        comprehensive_data = []
+        with st.spinner("Calculating comprehensive metrics..."):
+            for instrument, data in data_dict.items():
+                if data['success']:
+                    try:
+                        # Fetch option chain again for detailed analysis
+                        detail_data = fetch_option_chain_data(instrument, NSE_INSTRUMENTS)
+                        if detail_data['success']:
+                            records = detail_data['records']
+                            spot = detail_data['spot']
+
+                            # Build dataframe similar to analyze_instrument
+                            calls, puts = [], []
+                            expiry = detail_data['expiry']
+
+                            today = datetime.now(timezone("Asia/Kolkata"))
+                            try:
+                                expiry_date = timezone("Asia/Kolkata").localize(datetime.strptime(expiry, "%d-%b-%Y"))
+                                T = max((expiry_date - today).days, 1) / 365
+                            except:
+                                T = 0.02  # Default to about 7 days
+
+                            r = 0.06
+
+                            for item in records:
+                                if 'CE' in item and item['CE'].get('expiryDate') == expiry:
+                                    ce = item['CE'].copy()
+                                    if ce.get('impliedVolatility', 0) > 0:
+                                        greeks = calculate_greeks('CE', spot, ce['strikePrice'], T, r, ce['impliedVolatility'] / 100)
+                                        ce.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                                    calls.append(ce)
+
+                                if 'PE' in item and item['PE'].get('expiryDate') == expiry:
+                                    pe = item['PE'].copy()
+                                    if pe.get('impliedVolatility', 0) > 0:
+                                        greeks = calculate_greeks('PE', spot, pe['strikePrice'], T, r, pe['impliedVolatility'] / 100)
+                                        pe.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                                    puts.append(pe)
+
+                            if calls and puts:
+                                df_ce = pd.DataFrame(calls)
+                                df_pe = pd.DataFrame(puts)
+                                df = pd.merge(df_ce, df_pe, on='strikePrice', suffixes=('_CE', '_PE'), how='outer').sort_values('strikePrice')
+
+                                # Fill NaN values with 0 for calculations
+                                for col in df.columns:
+                                    if df[col].dtype in ['float64', 'int64']:
+                                        df[col] = df[col].fillna(0)
+
+                                # Calculate metrics
+                                max_pain = calculate_max_pain(df)
+                                call_res, put_sup = find_call_resistance_put_support(df, spot)
+                                vega_bias, total_vega, _, _ = calculate_total_vega_bias(df)
+                                buildup = calculate_overall_buildup_pattern(df, spot)
+                                unusual = detect_unusual_activity(df, spot)
+
+                                comprehensive_data.append({
+                                    'Instrument': instrument,
+                                    'Spot': f"₹{spot:,.2f}",
+                                    'Max Pain': max_pain if max_pain else 'N/A',
+                                    'Call Resistance': call_res if call_res else 'N/A',
+                                    'Put Support': put_sup if put_sup else 'N/A',
+                                    'Vega Bias': vega_bias.split('(')[0].strip(),
+                                    'Buildup Pattern': buildup,
+                                    'Unusual Activity': len(unusual)
+                                })
+                    except Exception as e:
+                        # Silent failure for individual instruments
+                        pass
+
+        if comprehensive_data:
+            comp_df = pd.DataFrame(comprehensive_data)
+
+            # Color coding function
+            def color_comprehensive_cells(val):
+                if 'Bullish' in str(val):
+                    return 'background-color: #90EE90; color: black'
+                elif 'Bearish' in str(val):
+                    return 'background-color: #FFB6C1; color: black'
+                elif 'Neutral' in str(val):
+                    return 'background-color: #FFFFE0; color: black'
+                return ''
+
+            styled_comp = comp_df.style.applymap(color_comprehensive_cells, subset=['Vega Bias', 'Buildup Pattern'])
+            st.dataframe(styled_comp, use_container_width=True, hide_index=True)
+
+            # Explanation
+            with st.expander("📖 Comprehensive Metrics Guide"):
+                st.markdown("""
+                ### Comprehensive Market Analysis Metrics
+
+                **Max Pain Strike:**
+                - Strike price where option writers would lose the least money at expiry
+                - Price tends to gravitate toward Max Pain as expiry approaches
+
+                **Call Resistance (OI):**
+                - Strike with highest Call OI above current spot
+                - Acts as resistance level where selling pressure may increase
+
+                **Put Support (OI):**
+                - Strike with highest Put OI below current spot
+                - Acts as support level where buying interest may emerge
+
+                **Vega Bias:**
+                - Shows which side has higher volatility exposure
+                - Bullish: More Put vega (expecting upside volatility)
+                - Bearish: More Call vega (expecting downside volatility)
+
+                **Buildup Pattern:**
+                - Analyzes OI changes across ITM, ATM, and OTM strikes
+                - Identifies protective strategies, directional bets, and positioning
+
+                **Unusual Activity:**
+                - Number of strikes with abnormally high volume relative to OI
+                - Indicates potential smart money movement or large positions
+                """)
+
+        # Timestamp
+        st.caption(f"Last Updated: {datetime.now(timezone('Asia/Kolkata')).strftime('%Y-%m-%d %H:%M:%S IST')}")
+
+    else:
+        st.info("👆 Click 'Fetch All Data' to load option chain analysis")
+
+        st.markdown("""
+        ### About Overall Option Chain Analysis
+
+        This section provides:
+
+        - **PCR (Put-Call Ratio)** for all instruments
+          - Total OI based PCR
+          - Change in OI based PCR
+
+        - **Market-wide bias** aggregation
+
+        - **Category-wise breakdown** (Indices vs Stocks)
+
+        - **Trading recommendations** based on overall sentiment
+
+        **How to use:**
+        1. Click 'Fetch All Data' to get latest option chain data
+        2. Review PCR ratios for each instrument
+        3. Check overall market bias
+        4. Use the insights for trading decisions
+        """)
+
+
+def calculate_max_pain(df_full_chain):
+    """
+    Calculate Max Pain strike - the strike where option writers would lose the least money
+    """
+    try:
+        strikes = df_full_chain['strikePrice'].unique()
+        pain_values = []
+
+        for strike in strikes:
+            call_pain = 0
+            put_pain = 0
+
+            # Calculate pain for all strikes
+            for _, row in df_full_chain.iterrows():
+                row_strike = row['strikePrice']
+
+                # Call pain: If strike price > current strike, calls are ITM
+                if row_strike < strike:
+                    call_pain += (strike - row_strike) * row.get('openInterest_CE', 0)
+
+                # Put pain: If strike price < current strike, puts are ITM
+                if row_strike > strike:
+                    put_pain += (row_strike - strike) * row.get('openInterest_PE', 0)
+
+            total_pain = call_pain + put_pain
+            pain_values.append({'strike': strike, 'pain': total_pain})
+
+        # Max pain is the strike with minimum total pain
+        max_pain_data = min(pain_values, key=lambda x: x['pain'])
+        return max_pain_data['strike']
+    except:
+        return None
+
+def calculate_synthetic_future_bias(atm_ce_price, atm_pe_price, atm_strike, spot_price):
+    """
+    Calculate Synthetic Future Bias at ATM
+    Synthetic Future = Strike + CE Premium - PE Premium
+    Bias indicates whether synthetic is trading above or below spot
+    """
+    try:
+        synthetic_future = atm_strike + atm_ce_price - atm_pe_price
+        difference = synthetic_future - spot_price
+
+        if difference > 5:  # Threshold can be adjusted
+            return "Bullish", synthetic_future, difference
+        elif difference < -5:
+            return "Bearish", synthetic_future, difference
+        else:
+            return "Neutral", synthetic_future, difference
+    except:
+        return "Neutral", 0, 0
+
+def calculate_atm_buildup_pattern(atm_ce_oi, atm_pe_oi, atm_ce_change, atm_pe_change):
+    """
+    Determine ATM buildup pattern based on OI changes
+    """
+    try:
+        # Classify based on OI changes
+        if atm_ce_change > 0 and atm_pe_change > 0:
+            if atm_ce_change > atm_pe_change:
+                return "Long Buildup (Bearish)"
+            else:
+                return "Short Buildup (Bullish)"
+        elif atm_ce_change < 0 and atm_pe_change < 0:
+            if abs(atm_ce_change) > abs(atm_pe_change):
+                return "Short Covering (Bullish)"
+            else:
+                return "Long Unwinding (Bearish)"
+        elif atm_ce_change > 0 and atm_pe_change < 0:
+            return "Call Writing (Bearish)"
+        elif atm_ce_change < 0 and atm_pe_change > 0:
+            return "Put Writing (Bullish)"
+        else:
+            return "Neutral"
+    except:
+        return "Neutral"
+
+def calculate_atm_vega_bias(atm_ce_vega, atm_pe_vega, atm_ce_oi, atm_pe_oi):
+    """
+    Calculate ATM Vega exposure bias
+    Higher vega exposure on one side indicates expectation of volatility
+    """
+    try:
+        ce_vega_exposure = atm_ce_vega * atm_ce_oi
+        pe_vega_exposure = atm_pe_vega * atm_pe_oi
+
+        total_vega_exposure = ce_vega_exposure + pe_vega_exposure
+
+        if pe_vega_exposure > ce_vega_exposure * 1.1:
+            return "Bullish (High Put Vega)", total_vega_exposure
+        elif ce_vega_exposure > pe_vega_exposure * 1.1:
+            return "Bearish (High Call Vega)", total_vega_exposure
+        else:
+            return "Neutral", total_vega_exposure
+    except:
+        return "Neutral", 0
+
+def find_call_resistance_put_support(df_full_chain, spot_price):
+    """
+    Find key resistance (from Call OI) and support (from Put OI) strikes
+    """
+    try:
+        # Find strikes above spot with highest Call OI (Resistance)
+        above_spot = df_full_chain[df_full_chain['strikePrice'] > spot_price].copy()
+        if not above_spot.empty:
+            call_resistance = above_spot.nlargest(1, 'openInterest_CE')['strikePrice'].values[0]
+        else:
+            call_resistance = None
+
+        # Find strikes below spot with highest Put OI (Support)
+        below_spot = df_full_chain[df_full_chain['strikePrice'] < spot_price].copy()
+        if not below_spot.empty:
+            put_support = below_spot.nlargest(1, 'openInterest_PE')['strikePrice'].values[0]
+        else:
+            put_support = None
+
+        return call_resistance, put_support
+    except:
+        return None, None
+
+def calculate_total_vega_bias(df_full_chain):
+    """
+    Calculate total Vega bias across all strikes
+    """
+    try:
+        total_ce_vega = (df_full_chain['Vega_CE'] * df_full_chain['openInterest_CE']).sum()
+        total_pe_vega = (df_full_chain['Vega_PE'] * df_full_chain['openInterest_PE']).sum()
+
+        total_vega = total_ce_vega + total_pe_vega
+
+        if total_pe_vega > total_ce_vega * 1.1:
+            return "Bullish (Put Heavy)", total_vega, total_ce_vega, total_pe_vega
+        elif total_ce_vega > total_pe_vega * 1.1:
+            return "Bearish (Call Heavy)", total_vega, total_ce_vega, total_pe_vega
+        else:
+            return "Neutral", total_vega, total_ce_vega, total_pe_vega
+    except:
+        return "Neutral", 0, 0, 0
+
+def detect_unusual_activity(df_full_chain, spot_price):
+    """
+    Detect strikes with unusual activity (high volume relative to OI)
+    """
+    try:
+        unusual_strikes = []
+
+        for _, row in df_full_chain.iterrows():
+            strike = row['strikePrice']
+
+            # Check Call side
+            ce_oi = row.get('openInterest_CE', 0)
+            ce_volume = row.get('totalTradedVolume_CE', 0)
+            if ce_oi > 0 and ce_volume / ce_oi > 0.5:  # Volume > 50% of OI
+                unusual_strikes.append({
+                    'strike': strike,
+                    'type': 'CE',
+                    'volume_oi_ratio': ce_volume / ce_oi if ce_oi > 0 else 0,
+                    'volume': ce_volume,
+                    'oi': ce_oi
+                })
+
+            # Check Put side
+            pe_oi = row.get('openInterest_PE', 0)
+            pe_volume = row.get('totalTradedVolume_PE', 0)
+            if pe_oi > 0 and pe_volume / pe_oi > 0.5:
+                unusual_strikes.append({
+                    'strike': strike,
+                    'type': 'PE',
+                    'volume_oi_ratio': pe_volume / pe_oi if pe_oi > 0 else 0,
+                    'volume': pe_volume,
+                    'oi': pe_oi
+                })
+
+        # Sort by volume/OI ratio and return top 5
+        unusual_strikes.sort(key=lambda x: x['volume_oi_ratio'], reverse=True)
+        return unusual_strikes[:5]
+    except:
+        return []
+
+def calculate_overall_buildup_pattern(df_full_chain, spot_price):
+    """
+    Calculate overall buildup pattern across ITM, ATM, and OTM strikes
+    """
+    try:
+        # Separate into ITM, ATM, OTM
+        itm_calls = df_full_chain[df_full_chain['strikePrice'] < spot_price].copy()
+        otm_calls = df_full_chain[df_full_chain['strikePrice'] > spot_price].copy()
+        atm_strikes = df_full_chain[abs(df_full_chain['strikePrice'] - spot_price) <= 50].copy()
+
+        # Calculate OI changes for each zone
+        itm_ce_change = itm_calls['changeinOpenInterest_CE'].sum() if not itm_calls.empty else 0
+        itm_pe_change = itm_calls['changeinOpenInterest_PE'].sum() if not itm_calls.empty else 0
+
+        otm_ce_change = otm_calls['changeinOpenInterest_CE'].sum() if not otm_calls.empty else 0
+        otm_pe_change = otm_calls['changeinOpenInterest_PE'].sum() if not otm_calls.empty else 0
+
+        atm_ce_change = atm_strikes['changeinOpenInterest_CE'].sum() if not atm_strikes.empty else 0
+        atm_pe_change = atm_strikes['changeinOpenInterest_PE'].sum() if not atm_strikes.empty else 0
+
+        # Determine pattern
+        patterns = []
+
+        if itm_pe_change > 0 and otm_ce_change > 0:
+            patterns.append("Protective Strategy (Bullish)")
+        elif itm_ce_change > 0 and otm_pe_change > 0:
+            patterns.append("Protective Strategy (Bearish)")
+
+        if atm_ce_change > atm_pe_change and abs(atm_ce_change) > 1000:
+            patterns.append("Strong Call Writing (Bearish)")
+        elif atm_pe_change > atm_ce_change and abs(atm_pe_change) > 1000:
+            patterns.append("Strong Put Writing (Bullish)")
+
+        if otm_ce_change > itm_ce_change and otm_ce_change > 1000:
+            patterns.append("OTM Call Buying (Bullish)")
+        elif otm_pe_change > itm_pe_change and otm_pe_change > 1000:
+            patterns.append("OTM Put Buying (Bearish)")
+
+        return " | ".join(patterns) if patterns else "Balanced/Neutral"
+
+    except:
+        return "Neutral"
+
+def calculate_and_store_atm_zone_bias_silent(instrument, NSE_INSTRUMENTS):
+    """
+    Silently calculate and store ATM zone bias data without any Streamlit display
+    Used for background analysis in Overall Market Sentiment tab
+    Returns: True if successful, False otherwise
+    """
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        session = requests.Session()
+        session.headers.update(headers)
+        session.get("https://www.nseindia.com", timeout=5)
+
+        # Handle spaces in instrument names
+        url_instrument = instrument.replace(' ', '%20')
+        url = f"https://www.nseindia.com/api/option-chain-indices?symbol={url_instrument}" if instrument in NSE_INSTRUMENTS['indices'] else \
+              f"https://www.nseindia.com/api/option-chain-equities?symbol={url_instrument}"
+
+        response = session.get(url, timeout=10)
+        data = response.json()
+
+        records = data['records']['data']
+        expiry = data['records']['expiryDates'][0]
+        underlying = data['records']['underlyingValue']
+
+        today = datetime.now(timezone("Asia/Kolkata"))
+        expiry_date = timezone("Asia/Kolkata").localize(datetime.strptime(expiry, "%d-%b-%Y"))
+
+        # Calculate time to expiry
+        T = max((expiry_date - today).days, 1) / 365
+        r = 0.06
+
+        # Store current time for logging
+        now = datetime.now(timezone("Asia/Kolkata"))
+
+        calls, puts = [], []
+
+        for item in records:
+            if 'CE' in item and item['CE']['expiryDate'] == expiry:
+                ce = item['CE']
+                if ce['impliedVolatility'] > 0:
+                    greeks = calculate_greeks('CE', underlying, ce['strikePrice'], T, r, ce['impliedVolatility'] / 100)
+                    ce.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                calls.append(ce)
+
+            if 'PE' in item and item['PE']['expiryDate'] == expiry:
+                pe = item['PE']
+                if pe['impliedVolatility'] > 0:
+                    greeks = calculate_greeks('PE', underlying, pe['strikePrice'], T, r, pe['impliedVolatility'] / 100)
+                    pe.update(dict(zip(['Delta', 'Gamma', 'Vega', 'Theta', 'Rho'], greeks)))
+                puts.append(pe)
+
+        df_ce = pd.DataFrame(calls)
+        df_pe = pd.DataFrame(puts)
+        df = pd.merge(df_ce, df_pe, on='strikePrice', suffixes=('_CE', '_PE')).sort_values('strikePrice')
+
+        # Get instrument-specific parameters
+        atm_range = NSE_INSTRUMENTS['indices'].get(instrument, {}).get('atm_range', 200) or \
+                    NSE_INSTRUMENTS['stocks'].get(instrument, {}).get('atm_range', 200)
+
+        atm_strike = min(df['strikePrice'], key=lambda x: abs(x - underlying))
+        df = df[df['strikePrice'].between(atm_strike - atm_range, atm_strike + atm_range)]
+        df['Zone'] = df['strikePrice'].apply(lambda x: 'ATM' if x == atm_strike else 'ITM' if x < underlying else 'OTM')
+        df['Level'] = df.apply(determine_level, axis=1)
+
+        bias_results, total_score = [], 0
+        # Calculate Delta and Gamma Exposures
+        total_delta_exposure = 0
+        total_gamma_exposure = 0
+
+        for _, row in df.iterrows():
+            # Calculate exposures for all strikes
+            ce_delta_exp = row['Delta_CE'] * row['openInterest_CE']
+            pe_delta_exp = row['Delta_PE'] * row['openInterest_PE']
+            ce_gamma_exp = row['Gamma_CE'] * row['openInterest_CE']
+            pe_gamma_exp = row['Gamma_PE'] * row['openInterest_PE']
+
+            total_delta_exposure += (ce_delta_exp + pe_delta_exp)
+            total_gamma_exposure += (ce_gamma_exp + pe_gamma_exp)
+
+        weights = {"ChgOI_Bias": 1.5, "Volume_Bias": 1.0, "Delta_Bias": 2.0, "Gamma_Bias": 1.5,
+                   "AskQty_Bias": 0.8, "BidQty_Bias": 0.8, "IV_Bias": 1.2, "DVP_Bias": 1.8,
+                   "Delta_Exposure_Bias": 2.0, "Gamma_Exposure_Bias": 1.5, "IV_Skew_Bias": 1.0}
+
+        for _, row in df.iterrows():
+            if abs(row['strikePrice'] - atm_strike) > (atm_range/2):
+                continue
+
+            score = 0
+
+            # Calculate per-strike delta and gamma exposure
+            ce_delta_exp = row['Delta_CE'] * row['openInterest_CE']
+            pe_delta_exp = row['Delta_PE'] * row['openInterest_PE']
+            ce_gamma_exp = row['Gamma_CE'] * row['openInterest_CE']
+            pe_gamma_exp = row['Gamma_PE'] * row['openInterest_PE']
+
+            net_delta_exp = ce_delta_exp + pe_delta_exp
+            net_gamma_exp = ce_gamma_exp + pe_gamma_exp
+            strike_iv_skew = row['impliedVolatility_PE'] - row['impliedVolatility_CE']
+
+            delta_exp_bias = "Bullish" if net_delta_exp > 0 else "Bearish" if net_delta_exp < 0 else "Neutral"
+            gamma_exp_bias = "Bullish" if net_gamma_exp > 0 else "Bearish" if net_gamma_exp < 0 else "Neutral"
+            iv_skew_bias = "Bullish" if strike_iv_skew > 0 else "Bearish" if strike_iv_skew < 0 else "Neutral"
+
+            row_data = {
+                "Strike": row['strikePrice'],
+                "Zone": row['Zone'],
+                "Level": row['Level'],
+                "OI_Bias": "Bullish" if row['openInterest_CE'] < row['openInterest_PE'] else "Bearish",
+                "ChgOI_Bias": "Bullish" if row['changeinOpenInterest_CE'] < row['changeinOpenInterest_PE'] else "Bearish",
+                "Volume_Bias": "Bullish" if row['totalTradedVolume_CE'] < row['totalTradedVolume_PE'] else "Bearish",
+                "Delta_Bias": "Bullish" if abs(row['Delta_PE']) > abs(row['Delta_CE']) else "Bearish",
+                "Gamma_Bias": "Bullish" if row['Gamma_CE'] < row['Gamma_PE'] else "Bearish",
+                "Premium_Bias": "Bullish" if row['lastPrice_CE'] < row['lastPrice_PE'] else "Bearish",
+                "AskQty_Bias": "Bullish" if row['askQty_PE'] > row['askQty_CE'] else "Bearish",
+                "BidQty_Bias": "Bearish" if row['bidQty_PE'] > row['bidQty_CE'] else "Bullish",
+                "IV_Bias": "Bullish" if row['impliedVolatility_CE'] > row['impliedVolatility_PE'] else "Bearish",
+                "DVP_Bias": delta_volume_bias(
+                    row['lastPrice_CE'] - row['lastPrice_PE'],
+                    row['totalTradedVolume_CE'] - row['totalTradedVolume_PE'],
+                    row['changeinOpenInterest_CE'] - row['changeinOpenInterest_PE']
+                ),
+                "Delta_Exposure_Bias": delta_exp_bias,
+                "Gamma_Exposure_Bias": gamma_exp_bias,
+                "IV_Skew_Bias": iv_skew_bias
+            }
+
+            # Add OI_Change_Bias for compatibility (same as ChgOI_Bias)
+            row_data["OI_Change_Bias"] = row_data["ChgOI_Bias"]
+
+            for k in row_data:
+                if "_Bias" in k and k in weights:
+                    bias = row_data[k]
+                    score += weights.get(k, 1) if bias == "Bullish" else -weights.get(k, 1)
+
+            row_data["BiasScore"] = score
+            row_data["Verdict"] = final_verdict(score)
+            total_score += score
+            bias_results.append(row_data)
+
+        df_summary = pd.DataFrame(bias_results)
+
+        # Store df_summary in session state for access from Overall Market Sentiment tab
+        st.session_state[f'{instrument}_atm_zone_bias'] = df_summary.copy()
+
+        return True
+
+    except Exception as e:
+        # Silent failure - just return False
+        return False
