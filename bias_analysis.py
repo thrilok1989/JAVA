@@ -13,28 +13,10 @@ import yfinance as yf
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytz
-import requests
 warnings.filterwarnings('ignore')
 
 # Indian Standard Time (IST)
 IST = pytz.timezone('Asia/Kolkata')
-
-# === Telegram Config ===
-TELEGRAM_BOT_TOKEN = "8133685842:AAGdHCpi9QRIsS-fWW5Y1AJvS95QL9xU"
-TELEGRAM_CHAT_ID = "57096584"
-
-def send_telegram_message(message):
-    """Send Telegram message for indicator alignment alerts"""
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"}
-    try:
-        response = requests.post(url, data=data)
-        if response.status_code == 200:
-            print(f"✅ Telegram message sent successfully")
-        else:
-            print(f"⚠️ Telegram message failed with status {response.status_code}")
-    except Exception as e:
-        print(f"❌ Telegram error: {e}")
 
 # Import Dhan API for Indian indices volume data
 try:
@@ -660,24 +642,15 @@ class BiasAnalysisPro:
     # COMPREHENSIVE BIAS ANALYSIS
     # =========================================================================
 
-    def analyze_all_bias_indicators(self, symbol: str = "^NSEI", data: Optional[pd.DataFrame] = None) -> Dict:
+    def analyze_all_bias_indicators(self, symbol: str = "^NSEI") -> Dict:
         """
         Analyze all 8 bias indicators:
         Fast (8): Volume Delta, HVP, VOB, Order Blocks, RSI, DMI, VIDYA, MFI
-
-        Args:
-            symbol: Symbol to analyze (e.g., "^NSEI")
-            data: Optional pre-fetched DataFrame. If provided, will use this instead of fetching new data.
         """
 
-        # Use provided data if available, otherwise fetch it
-        if data is not None:
-            print(f"Using provided data for {symbol}...")
-            df = data
-        else:
-            print(f"Fetching data for {symbol}...")
-            # Use 7d period with 5m interval (Yahoo Finance limitation for intraday data)
-            df = self.fetch_data(symbol, period='7d', interval='5m')
+        print(f"Fetching data for {symbol}...")
+        # Use 7d period with 5m interval (Yahoo Finance limitation for intraday data)
+        df = self.fetch_data(symbol, period='7d', interval='5m')
 
         if df.empty or len(df) < 100:
             error_msg = f'Insufficient data (fetched {len(df)} candles, need at least 100)'
@@ -985,8 +958,6 @@ class BiasAnalysisPro:
             overall_bias = "NEUTRAL"
             overall_score = 0
             overall_confidence = 100 - max(bullish_bias_pct, bearish_bias_pct)
-
-        # Technical Indicators Telegram alert removed - only Bias Alignment Alert is sent
 
         return {
             'success': True,
