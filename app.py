@@ -2679,53 +2679,23 @@ with tab5:
         """)
 
 # ═══════════════════════════════════════════════════════════════════════
-# TAB 6: OPTION CHAIN ANALYSIS (NSE Options Analyzer)
+# TAB 6: OPTION CHAIN ANALYSIS (Nifty Option Screener v6.0)
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab6:
-    st.header("📊 NSE Options Analyzer")
-    st.caption("Comprehensive Option Chain Analysis with Bias Detection, Support/Resistance Zones, and Trade Signals")
+    st.header("🎯 Nifty Option Screener v6.0")
+    st.caption("100% SELLER'S PERSPECTIVE + MOMENT DETECTOR + AI ANALYSIS + EXPIRY SPIKE DETECTOR")
 
-    # Create tabs for main sections
-    tab_indices, tab_stocks, tab_overall = st.tabs(["📈 Indices", "🏢 Stocks", "🌐 Overall Market Analysis"])
-
-    with tab_indices:
-        st.header("NSE Indices Analysis")
-        # Create subtabs for each index
-        nifty_tab, banknifty_tab, sensex_tab, it_tab, auto_tab = st.tabs(["NIFTY", "BANKNIFTY", "SENSEX", "NIFTY IT", "NIFTY AUTO"])
-
-        with nifty_tab:
-            analyze_instrument('NIFTY', NSE_INSTRUMENTS)
-
-        with banknifty_tab:
-            analyze_instrument('BANKNIFTY', NSE_INSTRUMENTS)
-
-        with sensex_tab:
-            analyze_instrument('SENSEX', NSE_INSTRUMENTS)
-
-        with it_tab:
-            analyze_instrument('NIFTY IT', NSE_INSTRUMENTS)
-
-        with auto_tab:
-            analyze_instrument('NIFTY AUTO', NSE_INSTRUMENTS)
-
-    with tab_stocks:
-        st.header("Stock Options Analysis")
-        # Create subtabs for each stock
-        tcs_tab, reliance_tab, hdfc_tab = st.tabs(["TCS", "RELIANCE", "HDFCBANK"])
-
-        with tcs_tab:
-            analyze_instrument('TCS', NSE_INSTRUMENTS)
-
-        with reliance_tab:
-            analyze_instrument('RELIANCE', NSE_INSTRUMENTS)
-
-        with hdfc_tab:
-            analyze_instrument('HDFCBANK', NSE_INSTRUMENTS)
-
-    with tab_overall:
-        # Overall Market Analysis with PCR
-        display_overall_option_chain_analysis(NSE_INSTRUMENTS)
+    # Import and render the new Nifty Option Screener v6.0
+    try:
+        from nifty_option_screener_v6 import render_nifty_option_screener_v6
+        render_nifty_option_screener_v6()
+    except ImportError as e:
+        st.error(f"❌ Failed to load Nifty Option Screener v6.0: {e}")
+        st.info("Please ensure nifty_option_screener_v6.py is in the project directory")
+    except Exception as e:
+        st.error(f"❌ Error rendering Nifty Option Screener: {e}")
+        st.exception(e)
 
 # ═══════════════════════════════════════════════════════════════════════
 # TAB 7: ADVANCED CHART ANALYSIS
