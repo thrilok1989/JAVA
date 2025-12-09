@@ -24,7 +24,6 @@ from trade_executor import TradeExecutor
 from telegram_alerts import TelegramBot, send_test_message
 from dhan_api import check_dhan_connection
 from bias_analysis import BiasAnalysisPro
-from option_chain_analysis import OptionChainAnalyzer
 from nse_options_helpers import *
 from advanced_chart_analysis import AdvancedChartAnalysis
 from overall_market_sentiment import render_overall_market_sentiment, calculate_overall_sentiment, run_ai_analysis, shutdown_ai_engine
@@ -384,12 +383,6 @@ def get_bias_analyzer():
         st.session_state.bias_analyzer = BiasAnalysisPro()
     return st.session_state.bias_analyzer
 
-def get_option_chain_analyzer():
-    """Lazy load option chain analyzer"""
-    if 'option_chain_analyzer' not in st.session_state:
-        st.session_state.option_chain_analyzer = OptionChainAnalyzer()
-    return st.session_state.option_chain_analyzer
-
 def get_advanced_chart_analyzer():
     """Lazy load advanced chart analyzer"""
     if 'advanced_chart_analyzer' not in st.session_state:
@@ -398,9 +391,6 @@ def get_advanced_chart_analyzer():
 
 if 'bias_analysis_results' not in st.session_state:
     st.session_state.bias_analysis_results = None
-
-if 'option_chain_results' not in st.session_state:
-    st.session_state.option_chain_results = None
 
 if 'chart_data' not in st.session_state:
     st.session_state.chart_data = None
@@ -2679,20 +2669,20 @@ with tab5:
         """)
 
 # ═══════════════════════════════════════════════════════════════════════
-# TAB 6: OPTION CHAIN ANALYSIS (Nifty Option Screener v6.0)
+# TAB 6: OPTION CHAIN ANALYSIS (Nifty Option Screener v7.0)
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab6:
-    st.header("🎯 Nifty Option Screener v6.0")
-    st.caption("100% SELLER'S PERSPECTIVE + MOMENT DETECTOR + AI ANALYSIS + EXPIRY SPIKE DETECTOR")
+    st.header("🎯 Nifty Option Screener v7.0")
+    st.caption("100% SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR + EXPIRY SPIKE DETECTOR + ENHANCED OI/PCR ANALYTICS")
 
-    # Import and render the new Nifty Option Screener v6.0
+    # Import and render the new Nifty Option Screener v7.0
     try:
-        from nifty_option_screener_v6 import render_nifty_option_screener_v6
-        render_nifty_option_screener_v6()
+        from NiftyOptionScreener import render_nifty_option_screener
+        render_nifty_option_screener()
     except ImportError as e:
-        st.error(f"❌ Failed to load Nifty Option Screener v6.0: {e}")
-        st.info("Please ensure nifty_option_screener_v6.py is in the project directory")
+        st.error(f"❌ Failed to load Nifty Option Screener v7.0: {e}")
+        st.info("Please ensure NiftyOptionScreener.py is in the project directory")
     except Exception as e:
         st.error(f"❌ Error rendering Nifty Option Screener: {e}")
         st.exception(e)

@@ -1298,32 +1298,38 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 st.dataframe(tech_df, use_container_width=True, hide_index=True)
 
     # ─────────────────────────────────────────────────────────────────
-    # 3. NIFTY OPTION SCREENER v6.0 (SELLER'S PERSPECTIVE + MOMENT DETECTOR)
+    # 3. NIFTY OPTION SCREENER v7.0 (SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR)
     # ─────────────────────────────────────────────────────────────────
     st.markdown("---")
-    with st.expander("**🎯 Nifty Option Screener v6.0 - Seller's Perspective + Moment Detector**", expanded=True):
+    with st.expander("**🎯 Nifty Option Screener v7.0 - Seller's Perspective + ATM Bias Analyzer + Moment Detector**", expanded=True):
         st.markdown("""
         ### 🎯 NIFTY Option Chain Analysis (Seller's Perspective)
 
-        **100% SELLER'S PERSPECTIVE + MOMENT DETECTOR + AI ANALYSIS + EXPIRY SPIKE DETECTOR**
+        **100% SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR + EXPIRY SPIKE DETECTOR + ENHANCED OI/PCR ANALYTICS**
 
         All interpretations from Option Seller/Market Maker viewpoint:
         - **CALL building** = BEARISH (sellers selling calls, expecting price to stay below)
         - **PUT building** = BULLISH (sellers selling puts, expecting price to stay above)
+
+        **New in v7.0:**
+        - 12-metric ATM Bias Analyzer
+        - Enhanced OI/PCR Analytics
+        - Improved Moment Detection
+        - Expiry Spike Detector
         """)
 
         try:
-            from nifty_option_screener_v6 import render_nifty_option_screener_v6
+            from NiftyOptionScreener import render_nifty_option_screener
 
-            # Render the comprehensive Nifty Option Screener v6.0
-            render_nifty_option_screener_v6()
+            # Render the comprehensive Nifty Option Screener v7.0
+            render_nifty_option_screener()
 
         except ImportError as e:
-            st.error(f"❌ Failed to load Nifty Option Screener v6.0: {e}")
+            st.error(f"❌ Failed to load Nifty Option Screener v7.0: {e}")
             st.info("""
             ### ⚙️ Setup Instructions:
 
-            1. Ensure `nifty_option_screener_v6.py` is in the project directory
+            1. Ensure `NiftyOptionScreener.py` is in the project directory
             2. Add required credentials to `.streamlit/secrets.toml`:
 
             ```toml
@@ -1335,8 +1341,6 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             SUPABASE_ANON_KEY = "your_supabase_key"
             TELEGRAM_BOT_TOKEN = "your_telegram_token"
             TELEGRAM_CHAT_ID = "your_chat_id"
-            PERPLEXITY_API_KEY = "your_perplexity_key"
-            ENABLE_AI_ANALYSIS = "true"
             ```
             """)
         except Exception as e:
