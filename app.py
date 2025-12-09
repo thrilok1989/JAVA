@@ -1716,9 +1716,9 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🎯 Trade Setup",
     "📊 Active Signals",
     "📈 Positions",
-    "🎯 Bias Analysis Pro",
-    "📊 Option Chain Analysis",
-    "📈 Advanced Chart Analysis"
+    "🎲 Bias Analysis Pro",
+    "🔍 Option Chain Analysis",
+    "📉 Advanced Chart Analysis"
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
