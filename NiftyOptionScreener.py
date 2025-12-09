@@ -920,6 +920,588 @@ def analyze_atm_bias_plus3(merged_df, spot, atm_strike, strike_gap):
     }
 
 # ============================================
+# 📊 ATM ±2 STRIKES DETAILED TABULATION (NEW)
+# ============================================
+def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
+    """
+    Calculate 11 bias metrics for a single strike
+    Returns: dict with bias scores, emojis, and interpretations for one strike
+    """
+    bias_scores = {}
+    bias_emojis = {}
+    bias_interpretations = {}
+
+    # Extract data for this strike
+    ce_oi = strike_data.get("OI_CE", 0)
+    pe_oi = strike_data.get("OI_PE", 0)
+    ce_chg = strike_data.get("Chg_OI_CE", 0)
+    pe_chg = strike_data.get("Chg_OI_PE", 0)
+    ce_vol = strike_data.get("Vol_CE", 0)
+    pe_vol = strike_data.get("Vol_PE", 0)
+    ce_delta = strike_data.get("Delta_CE", 0)
+    pe_delta = strike_data.get("Delta_PE", 0)
+    ce_gamma = strike_data.get("Gamma_CE", 0)
+    pe_gamma = strike_data.get("Gamma_PE", 0)
+    ce_ltp = strike_data.get("LTP_CE", 0)
+    pe_ltp = strike_data.get("LTP_PE", 0)
+    ce_iv = strike_data.get("IV_CE", 0)
+    pe_iv = strike_data.get("IV_PE", 0)
+
+    # 1. OI BIAS
+    oi_ratio = pe_oi / max(ce_oi, 1)
+    if oi_ratio > 1.5:
+        bias_scores["OI"] = 1
+        bias_emojis["OI"] = "🐂"
+        bias_interpretations["OI"] = "Heavy PUT OI → Bullish"
+    elif oi_ratio > 1.0:
+        bias_scores["OI"] = 0.5
+        bias_emojis["OI"] = "🐂"
+        bias_interpretations["OI"] = "Moderate PUT OI"
+    elif oi_ratio < 0.7:
+        bias_scores["OI"] = -1
+        bias_emojis["OI"] = "🐻"
+        bias_interpretations["OI"] = "Heavy CALL OI → Bearish"
+    elif oi_ratio < 1.0:
+        bias_scores["OI"] = -0.5
+        bias_emojis["OI"] = "🐻"
+        bias_interpretations["OI"] = "Moderate CALL OI"
+    else:
+        bias_scores["OI"] = 0
+        bias_emojis["OI"] = "⚖️"
+        bias_interpretations["OI"] = "Balanced OI"
+
+    # 2. CHANGE IN OI BIAS
+    if pe_chg > 0 and ce_chg > 0:
+        if pe_chg > ce_chg:
+            bias_scores["ChgOI"] = 0.5
+            bias_emojis["ChgOI"] = "🐂"
+            bias_interpretations["ChgOI"] = "More PUT writing"
+        else:
+            bias_scores["ChgOI"] = -0.5
+            bias_emojis["ChgOI"] = "🐻"
+            bias_interpretations["ChgOI"] = "More CALL writing"
+    elif pe_chg > 0:
+        bias_scores["ChgOI"] = 1
+        bias_emojis["ChgOI"] = "🐂"
+        bias_interpretations["ChgOI"] = "Only PUT writing"
+    elif ce_chg > 0:
+        bias_scores["ChgOI"] = -1
+        bias_emojis["ChgOI"] = "🐻"
+        bias_interpretations["ChgOI"] = "Only CALL writing"
+    else:
+        bias_scores["ChgOI"] = 0
+        bias_emojis["ChgOI"] = "⚖️"
+        bias_interpretations["ChgOI"] = "Mixed/Unwinding"
+
+    # 3. VOLUME BIAS
+    vol_ratio = pe_vol / max(ce_vol, 1)
+    if vol_ratio > 1.3:
+        bias_scores["Volume"] = 1
+        bias_emojis["Volume"] = "🐂"
+        bias_interpretations["Volume"] = "High PUT volume"
+    elif vol_ratio > 1.0:
+        bias_scores["Volume"] = 0.5
+        bias_emojis["Volume"] = "🐂"
+        bias_interpretations["Volume"] = "More PUT volume"
+    elif vol_ratio < 0.8:
+        bias_scores["Volume"] = -1
+        bias_emojis["Volume"] = "🐻"
+        bias_interpretations["Volume"] = "High CALL volume"
+    elif vol_ratio < 1.0:
+        bias_scores["Volume"] = -0.5
+        bias_emojis["Volume"] = "🐻"
+        bias_interpretations["Volume"] = "More CALL volume"
+    else:
+        bias_scores["Volume"] = 0
+        bias_emojis["Volume"] = "⚖️"
+        bias_interpretations["Volume"] = "Balanced volume"
+
+    # 4. DELTA BIAS
+    net_delta = ce_delta + pe_delta
+    if net_delta > 0.3:
+        bias_scores["Delta"] = -1
+        bias_emojis["Delta"] = "🐻"
+        bias_interpretations["Delta"] = "CALL heavy"
+    elif net_delta > 0.1:
+        bias_scores["Delta"] = -0.5
+        bias_emojis["Delta"] = "🐻"
+        bias_interpretations["Delta"] = "Mild CALL bias"
+    elif net_delta < -0.3:
+        bias_scores["Delta"] = 1
+        bias_emojis["Delta"] = "🐂"
+        bias_interpretations["Delta"] = "PUT heavy"
+    elif net_delta < -0.1:
+        bias_scores["Delta"] = 0.5
+        bias_emojis["Delta"] = "🐂"
+        bias_interpretations["Delta"] = "Mild PUT bias"
+    else:
+        bias_scores["Delta"] = 0
+        bias_emojis["Delta"] = "⚖️"
+        bias_interpretations["Delta"] = "Neutral delta"
+
+    # 5. GAMMA BIAS
+    net_gamma = ce_gamma + pe_gamma
+    if net_gamma > 0.1:
+        bias_scores["Gamma"] = 1
+        bias_emojis["Gamma"] = "🐂"
+        bias_interpretations["Gamma"] = "Stabilizing"
+    elif net_gamma > 0:
+        bias_scores["Gamma"] = 0.5
+        bias_emojis["Gamma"] = "🐂"
+        bias_interpretations["Gamma"] = "Slightly stable"
+    elif net_gamma < -0.1:
+        bias_scores["Gamma"] = -1
+        bias_emojis["Gamma"] = "🐻"
+        bias_interpretations["Gamma"] = "Explosive"
+    elif net_gamma < 0:
+        bias_scores["Gamma"] = -0.5
+        bias_emojis["Gamma"] = "🐻"
+        bias_interpretations["Gamma"] = "Slightly explosive"
+    else:
+        bias_scores["Gamma"] = 0
+        bias_emojis["Gamma"] = "⚖️"
+        bias_interpretations["Gamma"] = "Neutral gamma"
+
+    # 6. PREMIUM BIAS
+    premium_ratio = pe_ltp / max(ce_ltp, 0.01)
+    if premium_ratio > 1.2:
+        bias_scores["Premium"] = 1
+        bias_emojis["Premium"] = "🐂"
+        bias_interpretations["Premium"] = "PUT premium high"
+    elif premium_ratio > 1.0:
+        bias_scores["Premium"] = 0.5
+        bias_emojis["Premium"] = "🐂"
+        bias_interpretations["Premium"] = "PUT premium higher"
+    elif premium_ratio < 0.8:
+        bias_scores["Premium"] = -1
+        bias_emojis["Premium"] = "🐻"
+        bias_interpretations["Premium"] = "CALL premium high"
+    elif premium_ratio < 1.0:
+        bias_scores["Premium"] = -0.5
+        bias_emojis["Premium"] = "🐻"
+        bias_interpretations["Premium"] = "CALL premium higher"
+    else:
+        bias_scores["Premium"] = 0
+        bias_emojis["Premium"] = "⚖️"
+        bias_interpretations["Premium"] = "Balanced premiums"
+
+    # 7. IV BIAS
+    if pe_iv > ce_iv + 3:
+        bias_scores["IV"] = 1
+        bias_emojis["IV"] = "🐂"
+        bias_interpretations["IV"] = "PUT IV high"
+    elif pe_iv > ce_iv + 1:
+        bias_scores["IV"] = 0.5
+        bias_emojis["IV"] = "🐂"
+        bias_interpretations["IV"] = "PUT IV higher"
+    elif ce_iv > pe_iv + 3:
+        bias_scores["IV"] = -1
+        bias_emojis["IV"] = "🐻"
+        bias_interpretations["IV"] = "CALL IV high"
+    elif ce_iv > pe_iv + 1:
+        bias_scores["IV"] = -0.5
+        bias_emojis["IV"] = "🐻"
+        bias_interpretations["IV"] = "CALL IV higher"
+    else:
+        bias_scores["IV"] = 0
+        bias_emojis["IV"] = "⚖️"
+        bias_interpretations["IV"] = "Balanced IV"
+
+    # 8. DELTA EXPOSURE
+    delta_exp_ce = ce_delta * ce_oi
+    delta_exp_pe = pe_delta * pe_oi
+    net_delta_exp = delta_exp_ce + delta_exp_pe
+    if net_delta_exp > 1000000:
+        bias_scores["DeltaExp"] = -1
+        bias_emojis["DeltaExp"] = "🐻"
+        bias_interpretations["DeltaExp"] = "High CALL Δ exp"
+    elif net_delta_exp > 500000:
+        bias_scores["DeltaExp"] = -0.5
+        bias_emojis["DeltaExp"] = "🐻"
+        bias_interpretations["DeltaExp"] = "Mod CALL Δ exp"
+    elif net_delta_exp < -1000000:
+        bias_scores["DeltaExp"] = 1
+        bias_emojis["DeltaExp"] = "🐂"
+        bias_interpretations["DeltaExp"] = "High PUT Δ exp"
+    elif net_delta_exp < -500000:
+        bias_scores["DeltaExp"] = 0.5
+        bias_emojis["DeltaExp"] = "🐂"
+        bias_interpretations["DeltaExp"] = "Mod PUT Δ exp"
+    else:
+        bias_scores["DeltaExp"] = 0
+        bias_emojis["DeltaExp"] = "⚖️"
+        bias_interpretations["DeltaExp"] = "Balanced Δ exp"
+
+    # 9. GAMMA EXPOSURE
+    gamma_exp_ce = ce_gamma * ce_oi
+    gamma_exp_pe = pe_gamma * pe_oi
+    net_gamma_exp = gamma_exp_ce + gamma_exp_pe
+    if net_gamma_exp > 500000:
+        bias_scores["GammaExp"] = 1
+        bias_emojis["GammaExp"] = "🐂"
+        bias_interpretations["GammaExp"] = "High γ exp"
+    elif net_gamma_exp > 100000:
+        bias_scores["GammaExp"] = 0.5
+        bias_emojis["GammaExp"] = "🐂"
+        bias_interpretations["GammaExp"] = "Mod γ exp"
+    elif net_gamma_exp < -500000:
+        bias_scores["GammaExp"] = -1
+        bias_emojis["GammaExp"] = "🐻"
+        bias_interpretations["GammaExp"] = "Neg γ exp"
+    elif net_gamma_exp < -100000:
+        bias_scores["GammaExp"] = -0.5
+        bias_emojis["GammaExp"] = "🐻"
+        bias_interpretations["GammaExp"] = "Mild neg γ exp"
+    else:
+        bias_scores["GammaExp"] = 0
+        bias_emojis["GammaExp"] = "⚖️"
+        bias_interpretations["GammaExp"] = "Balanced γ exp"
+
+    # 10. IV SKEW BIAS (simplified for single strike)
+    iv_skew = pe_iv - ce_iv
+    if iv_skew > 3:
+        bias_scores["IVSkew"] = 0.5
+        bias_emojis["IVSkew"] = "🐂"
+        bias_interpretations["IVSkew"] = "Bullish skew"
+    elif iv_skew < -3:
+        bias_scores["IVSkew"] = -0.5
+        bias_emojis["IVSkew"] = "🐻"
+        bias_interpretations["IVSkew"] = "Bearish skew"
+    else:
+        bias_scores["IVSkew"] = 0
+        bias_emojis["IVSkew"] = "⚖️"
+        bias_interpretations["IVSkew"] = "Flat skew"
+
+    # 11. OI CHANGE ACCELERATION
+    total_oi_change = abs(ce_chg) + abs(pe_chg)
+    total_oi = ce_oi + pe_oi
+    if total_oi > 0:
+        oi_change_rate = total_oi_change / total_oi
+        if oi_change_rate > 0.1:
+            if pe_chg > ce_chg:
+                bias_scores["OIChgRate"] = 0.5
+                bias_emojis["OIChgRate"] = "🐂"
+                bias_interpretations["OIChgRate"] = "Rapid PUT buildup"
+            else:
+                bias_scores["OIChgRate"] = -0.5
+                bias_emojis["OIChgRate"] = "🐻"
+                bias_interpretations["OIChgRate"] = "Rapid CALL buildup"
+        else:
+            bias_scores["OIChgRate"] = 0
+            bias_emojis["OIChgRate"] = "⚖️"
+            bias_interpretations["OIChgRate"] = "Slow OI changes"
+    else:
+        bias_scores["OIChgRate"] = 0
+        bias_emojis["OIChgRate"] = "⚖️"
+        bias_interpretations["OIChgRate"] = "No OI"
+
+    # Calculate total bias score for this strike
+    total_score = sum(bias_scores.values())
+    avg_score = total_score / len(bias_scores) if bias_scores else 0
+
+    # Determine overall verdict for this strike
+    if avg_score > 0.3:
+        verdict = "🐂 BULLISH"
+        verdict_color = "#00ff88"
+    elif avg_score > 0.1:
+        verdict = "🐂 Mild Bullish"
+        verdict_color = "#00cc66"
+    elif avg_score < -0.3:
+        verdict = "🐻 BEARISH"
+        verdict_color = "#ff4444"
+    elif avg_score < -0.1:
+        verdict = "🐻 Mild Bearish"
+        verdict_color = "#ff6666"
+    else:
+        verdict = "⚖️ NEUTRAL"
+        verdict_color = "#66b3ff"
+
+    return {
+        "strike": strike_price,
+        "is_atm": (strike_price == atm_strike),
+        "bias_scores": bias_scores,
+        "bias_emojis": bias_emojis,
+        "bias_interpretations": bias_interpretations,
+        "total_score": avg_score,
+        "verdict": verdict,
+        "verdict_color": verdict_color,
+        "metrics": {
+            "ce_oi": int(ce_oi),
+            "pe_oi": int(pe_oi),
+            "ce_chg": int(ce_chg),
+            "pe_chg": int(pe_chg),
+            "ce_vol": int(ce_vol),
+            "pe_vol": int(pe_vol),
+            "net_delta": round(ce_delta + pe_delta, 3),
+            "net_gamma": round(ce_gamma + pe_gamma, 3),
+            "ce_iv": round(ce_iv, 2),
+            "pe_iv": round(pe_iv, 2)
+        }
+    }
+
+
+def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
+    """
+    Create detailed tabulation for ATM ±2 strikes (5 strikes total)
+    Returns: List of strike analysis dictionaries
+    """
+    # Define ATM ±2 strikes
+    atm_window = 2
+    strikes_to_analyze = []
+    for i in range(-atm_window, atm_window + 1):
+        strike = atm_strike + (i * strike_gap)
+        strikes_to_analyze.append(strike)
+
+    # Filter data for these strikes
+    strike_analyses = []
+    for strike in strikes_to_analyze:
+        strike_data = merged_df[merged_df["strikePrice"] == strike]
+        if not strike_data.empty:
+            strike_dict = strike_data.iloc[0].to_dict()
+            analysis = analyze_individual_strike_bias(strike_dict, strike, atm_strike)
+            strike_analyses.append(analysis)
+
+    return strike_analyses
+
+
+def display_atm_strikes_tabulation(strike_analyses):
+    """
+    Display ATM ±2 strikes in a detailed tabulation format
+    """
+    if not strike_analyses:
+        st.warning("⚠️ No strike data available for tabulation")
+        return
+
+    st.markdown("### 📊 ATM ±2 STRIKES - 11 BIAS METRICS TABULATION")
+    st.caption("Detailed bias analysis for each strike with ATM highlighted")
+
+    # Create DataFrame for tabulation
+    table_data = []
+
+    # Prepare data for each strike
+    for analysis in strike_analyses:
+        strike = analysis["strike"]
+        is_atm = analysis["is_atm"]
+        verdict = analysis["verdict"]
+
+        row = {
+            "Strike": f"**₹{strike:,}**" if is_atm else f"₹{strike:,}",
+            "Verdict": verdict,
+            "Score": f"{analysis['total_score']:.2f}"
+        }
+
+        # Add all 11 bias metrics
+        for bias_name in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate"]:
+            emoji = analysis["bias_emojis"].get(bias_name, "⚖️")
+            score = analysis["bias_scores"].get(bias_name, 0)
+            row[bias_name] = f"{emoji} ({score:+.1f})"
+
+        table_data.append(row)
+
+    # Create DataFrame
+    df = pd.DataFrame(table_data)
+
+    # Display table with highlighting
+    st.dataframe(
+        df,
+        use_container_width=True,
+        height=min(400, len(df) * 35 + 50)
+    )
+
+    # Display detailed breakdown for ATM strike
+    atm_analysis = next((a for a in strike_analyses if a["is_atm"]), None)
+    if atm_analysis:
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%); padding: 20px; border-radius: 12px; border: 3px solid {atm_analysis["verdict_color"]}; margin: 20px 0;'>
+            <h4 style='color:{atm_analysis["verdict_color"]}; text-align: center;'>🎯 ATM STRIKE DETAILED BREAKDOWN</h4>
+            <div style='font-size: 1.5rem; color:{atm_analysis["verdict_color"]}; font-weight:900; text-align:center; margin: 10px 0;'>
+                ₹{atm_analysis["strike"]:,} - {atm_analysis["verdict"]}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Show interpretations in expandable section
+        with st.expander("📖 See Detailed Interpretations", expanded=False):
+            col1, col2 = st.columns(2)
+
+            interpretations = atm_analysis["bias_interpretations"]
+            bias_names = list(interpretations.keys())
+            mid_point = len(bias_names) // 2
+
+            with col1:
+                for bias_name in bias_names[:mid_point+1]:
+                    emoji = atm_analysis["bias_emojis"][bias_name]
+                    interp = interpretations[bias_name]
+                    score = atm_analysis["bias_scores"][bias_name]
+                    st.markdown(f"**{bias_name}:** {emoji} {interp} (Score: {score:+.2f})")
+
+            with col2:
+                for bias_name in bias_names[mid_point+1:]:
+                    emoji = atm_analysis["bias_emojis"][bias_name]
+                    interp = interpretations[bias_name]
+                    score = atm_analysis["bias_scores"][bias_name]
+                    st.markdown(f"**{bias_name}:** {emoji} {interp} (Score: {score:+.2f})")
+
+
+def display_overall_market_sentiment_summary(
+    overall_bias, atm_bias, atm_bias_plus3, seller_max_pain,
+    total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses
+):
+    """
+    Display reorganized Overall Market Sentiment dashboard with only key metrics
+    """
+    st.markdown("---")
+    st.markdown("## 🎯 OVERALL MARKET SENTIMENT - KEY METRICS")
+    st.caption("Consolidated view of the most important market indicators")
+
+    # Row 1: Overall Bias & Max Pain & GEX
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%); padding: 20px; border-radius: 12px; border: 3px solid {overall_bias["verdict_color"]}; text-align: center;'>
+            <h4 style='color:#ffcc00; margin: 0;'>🎯 OVERALL BIAS</h4>
+            <div style='font-size: 2.5rem; color:{overall_bias["verdict_color"]}; font-weight:900; margin: 10px 0;'>
+                {overall_bias["verdict"]}
+            </div>
+            <div style='font-size: 1.2rem; color:#ffffff; margin: 5px 0;'>
+                Score: {overall_bias["overall_score"]:.3f}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        max_pain_color = "#00ff88" if seller_max_pain else "#66b3ff"
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%); padding: 20px; border-radius: 12px; border: 2px solid {max_pain_color}; text-align: center;'>
+            <h4 style='color:#ffcc00; margin: 0;'>💰 MAX PAIN</h4>
+            <div style='font-size: 2.5rem; color:{max_pain_color}; font-weight:900; margin: 10px 0;'>
+                ₹{seller_max_pain:,}
+            </div>
+            <div style='font-size: 0.9rem; color:#cccccc; margin: 5px 0;'>
+                Seller's Max Pain Point
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        gex_color = "#00ff88" if total_gex_net > 0 else "#ff4444"
+        gex_label = "Positive GEX" if total_gex_net > 0 else "Negative GEX"
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%); padding: 20px; border-radius: 12px; border: 2px solid {gex_color}; text-align: center;'>
+            <h4 style='color:#ffcc00; margin: 0;'>⚡ GEX ANALYSIS</h4>
+            <div style='font-size: 2.5rem; color:{gex_color}; font-weight:900; margin: 10px 0;'>
+                {gex_label}
+            </div>
+            <div style='font-size: 0.9rem; color:#cccccc; margin: 5px 0;'>
+                {total_gex_net:,.0f}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Row 2: ATM ±2 Strike Tabulation
+    if strike_analyses:
+        display_atm_strikes_tabulation(strike_analyses)
+
+    st.markdown("---")
+
+    # Row 3: ATM ±3 Bias Summary
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if atm_bias:
+            st.markdown(f"""
+            <div style='background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border-left: 4px solid {atm_bias["verdict_color"]};'>
+                <h4 style='color:{atm_bias["verdict_color"]}; margin: 0 0 10px 0;'>🏛️ ATM ±2 BIAS</h4>
+                <div style='font-size: 1.8rem; color:{atm_bias["verdict_color"]}; font-weight:700; margin: 5px 0;'>
+                    {atm_bias["verdict"]}
+                </div>
+                <div style='font-size: 1.1rem; color:#ffcc00; margin: 5px 0;'>
+                    Strike: ₹{atm_bias["strike"]:,}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin: 5px 0;'>
+                    Score: {atm_bias["total_score"]:.2f}
+                </div>
+                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;'>
+                    <div><span style='color:#888;'>CALL OI:</span> <span style='color:#fff;'>{atm_bias['metrics']['ce_oi']:,}</span></div>
+                    <div><span style='color:#888;'>PUT OI:</span> <span style='color:#fff;'>{atm_bias['metrics']['pe_oi']:,}</span></div>
+                    <div><span style='color:#888;'>Net Δ:</span> <span style='color:#fff;'>{atm_bias['metrics']['net_delta']:.3f}</span></div>
+                    <div><span style='color:#888;'>Net γ:</span> <span style='color:#fff;'>{atm_bias['metrics']['net_gamma']:.3f}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    with col2:
+        if atm_bias_plus3:
+            st.markdown(f"""
+            <div style='background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border-left: 4px solid {atm_bias_plus3["verdict_color"]};'>
+                <h4 style='color:{atm_bias_plus3["verdict_color"]}; margin: 0 0 10px 0;'>🎯 ATM ±3 BIAS</h4>
+                <div style='font-size: 1.8rem; color:{atm_bias_plus3["verdict_color"]}; font-weight:700; margin: 5px 0;'>
+                    {atm_bias_plus3["verdict"]}
+                </div>
+                <div style='font-size: 1.1rem; color:#ffcc00; margin: 5px 0;'>
+                    Strike: ₹{atm_bias_plus3["strike"]:,}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin: 5px 0;'>
+                    Score: {atm_bias_plus3["total_score"]:.2f}
+                </div>
+                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;'>
+                    <div><span style='color:#888;'>CALL OI:</span> <span style='color:#fff;'>{atm_bias_plus3['metrics']['ce_oi']:,}</span></div>
+                    <div><span style='color:#888;'>PUT OI:</span> <span style='color:#fff;'>{atm_bias_plus3['metrics']['pe_oi']:,}</span></div>
+                    <div><span style='color:#888;'>PCR:</span> <span style='color:#fff;'>{atm_bias_plus3['metrics']['pcr']:.2f}</span></div>
+                    <div><span style='color:#888;'>Net γ:</span> <span style='color:#fff;'>{atm_bias_plus3['metrics']['net_gamma']:.3f}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    # Row 4: Expiry Analysis & Spike Analysis
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 📅 EXPIRY ANALYSIS")
+        if expiry_spike_data and expiry_spike_data.get("active"):
+            st.markdown(f"""
+            <div style='background: rgba(46,26,26,0.5); padding: 15px; border-radius: 10px; border: 2px solid {expiry_spike_data["color"]};'>
+                <div style='font-size: 1.5rem; color:{expiry_spike_data["color"]}; font-weight:700; margin-bottom: 10px;'>
+                    {expiry_spike_data["probability"]}% Probability
+                </div>
+                <div style='font-size: 1.1rem; color:#ffffff; margin-bottom: 5px;'>
+                    {expiry_spike_data["intensity"]}
+                </div>
+                <div style='font-size: 0.9rem; color:#ffcc00;'>
+                    Type: {expiry_spike_data["type"]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.info("📊 No significant expiry spike detected")
+
+    with col2:
+        st.markdown("### 📊 PCR ANALYSIS")
+        if oi_pcr_metrics:
+            pcr_val = oi_pcr_metrics.get("pcr_total", 0)
+            pcr_color = oi_pcr_metrics.get("pcr_color", "#66b3ff")
+            pcr_sentiment = oi_pcr_metrics.get("pcr_sentiment", "Neutral")
+            st.markdown(f"""
+            <div style='background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 2px solid {pcr_color};'>
+                <div style='font-size: 2rem; color:{pcr_color}; font-weight:700; text-align: center; margin-bottom: 10px;'>
+                    {pcr_val:.2f}
+                </div>
+                <div style='font-size: 1.1rem; color:#ffffff; text-align: center;'>
+                    {pcr_sentiment}
+                </div>
+                <div style='display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 0.85rem;'>
+                    <div><span style='color:#888;'>CALL OI:</span> <span style='color:#fff;'>{oi_pcr_metrics.get("total_ce_oi", 0):,}</span></div>
+                    <div><span style='color:#888;'>PUT OI:</span> <span style='color:#fff;'>{oi_pcr_metrics.get("total_pe_oi", 0):,}</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# ============================================
 # 🎯 SUPPORT/RESISTANCE BIAS ANALYZER (NEW)
 # ============================================
 def analyze_support_resistance_bias(merged_df, spot, atm_strike, strike_gap, level_type="Support"):
@@ -3703,9 +4285,8 @@ def render_nifty_option_screener():
     # ============================================
     # 📊 COMPREHENSIVE OI & PCR DASHBOARD
     # ============================================
-    
-    # Run OI/PCR analysis
-    oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
+
+    # OI/PCR analysis already calculated above for the summary dashboard
     
     st.markdown("---")
     st.markdown("## 📊 ENHANCED OI & PCR ANALYTICS DASHBOARD")
@@ -3939,17 +4520,41 @@ def render_nifty_option_screener():
     </div>
     """, unsafe_allow_html=True)
 
+    # ============================================
+    # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
+    # ============================================
+
+    # Create ATM ±2 strikes tabulation
+    strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+
+    # Run OI/PCR analysis early for the summary
+    oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
+
+    # Calculate expiry spike data early for the summary
+    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+    # Display the reorganized Overall Market Sentiment Summary Dashboard
+    display_overall_market_sentiment_summary(
+        overall_bias=overall_bias,
+        atm_bias=atm_bias,
+        atm_bias_plus3=atm_bias_plus3,
+        seller_max_pain=seller_max_pain,
+        total_gex_net=total_gex_net,
+        expiry_spike_data=expiry_spike_data,
+        oi_pcr_metrics=oi_pcr_metrics,
+        strike_analyses=strike_analyses
+    )
+
     # Display ATM Bias Dashboard
     if atm_bias or atm_bias_plus3 or support_bias or resistance_bias:
         display_bias_dashboard(atm_bias, support_bias, resistance_bias, atm_bias_plus3)
-    
+
     # ============================================
     # 📅 EXPIRY SPIKE DETECTION
     # ============================================
-    
-    # Calculate expiry spike data
-    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
-    
+
+    # Expiry spike data already calculated above for the summary dashboard
+
     # Advanced spike detection (optional)
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
     gamma_spike_risk = calculate_gamma_exposure_spike(total_gex_net, days_to_expiry)
