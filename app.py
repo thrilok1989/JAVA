@@ -3461,32 +3461,49 @@ with tab9:
     st.header("🌐 Enhanced Market Data Analysis")
     st.caption("Comprehensive market data from Dhan API + Yahoo Finance | India VIX, Sector Rotation, Global Markets, Intermarket Data, Gamma Squeeze, Intraday Timing")
 
-    # Button to fetch enhanced data
-    col1, col2, col3 = st.columns([2, 1, 1])
+    # Auto-fetch enhanced market data if not already loaded or stale (older than 5 minutes)
+    should_fetch = False
+
+    if 'enhanced_market_data' not in st.session_state:
+        should_fetch = True
+    else:
+        # Check if data is older than 5 minutes
+        from datetime import timedelta
+        data_age = get_current_time_ist() - st.session_state.enhanced_market_data.get('timestamp', get_current_time_ist())
+        if data_age > timedelta(minutes=5):
+            should_fetch = True
+
+    if should_fetch:
+        with st.spinner("🔄 Auto-loading comprehensive market data from all sources..."):
+            try:
+                from enhanced_market_data import get_enhanced_market_data
+                enhanced_data = get_enhanced_market_data()
+                st.session_state.enhanced_market_data = enhanced_data
+                st.success("✅ Enhanced market data loaded successfully!")
+            except Exception as e:
+                st.error(f"❌ Failed to fetch enhanced data: {e}")
+                import traceback
+                st.error(traceback.format_exc())
+
+    # Control buttons
+    col1, col2 = st.columns([1, 1])
 
     with col1:
-        if st.button("📊 Fetch Enhanced Market Data", type="primary", use_container_width=True, key="fetch_enhanced_data_btn"):
-            with st.spinner("Fetching comprehensive market data from all sources..."):
+        if st.button("🔄 Refresh Data", type="primary", use_container_width=True, key="refresh_enhanced_data_btn"):
+            with st.spinner("Refreshing market data..."):
                 try:
                     from enhanced_market_data import get_enhanced_market_data
                     enhanced_data = get_enhanced_market_data()
                     st.session_state.enhanced_market_data = enhanced_data
-                    st.success("✅ Enhanced market data fetched successfully!")
+                    st.success("✅ Data refreshed successfully!")
+                    st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Failed to fetch enhanced data: {e}")
-                    import traceback
-                    st.error(traceback.format_exc())
+                    st.error(f"❌ Failed to refresh data: {e}")
 
     with col2:
         if 'enhanced_market_data' in st.session_state:
-            if st.button("🗑️ Clear Data", use_container_width=True, key="clear_enhanced_data_btn"):
-                del st.session_state.enhanced_market_data
-                st.rerun()
-
-    with col3:
-        if 'enhanced_market_data' in st.session_state:
             data = st.session_state.enhanced_market_data
-            st.caption(f"Last Updated: {data['timestamp'].strftime('%H:%M:%S')}")
+            st.caption(f"📅 Last Updated: {data['timestamp'].strftime('%Y-%m-%d %H:%M:%S IST')}")
 
     # Display enhanced market data if available
     if 'enhanced_market_data' in st.session_state:
@@ -3499,7 +3516,7 @@ with tab9:
             st.error(traceback.format_exc())
     else:
         st.info("""
-        👆 Click "Fetch Enhanced Market Data" to load comprehensive market analysis including:
+        ℹ️ Enhanced market data will auto-load on first visit and refresh every 5 minutes.
 
         **Data Sources:**
         - 📊 **Dhan API:** India VIX, All Sector Indices (IT, Auto, Pharma, Metal, FMCG, Realty, Energy)
