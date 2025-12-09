@@ -79,23 +79,48 @@ TIME_WINDOWS = {
 #  SECRETS
 # -----------------------
 try:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
-    SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
+    # Try nested format first (from app.py config), then fallback to flat format
+    try:
+        DHAN_CLIENT_ID = st.secrets["DHAN"]["CLIENT_ID"]
+        DHAN_ACCESS_TOKEN = st.secrets["DHAN"]["ACCESS_TOKEN"]
+    except:
+        # Fallback to flat format
+        DHAN_CLIENT_ID = st.secrets.get("DHAN_CLIENT_ID", "")
+        DHAN_ACCESS_TOKEN = st.secrets.get("DHAN_ACCESS_TOKEN", "")
+
+    # Supabase credentials (optional)
+    SUPABASE_URL = st.secrets.get("SUPABASE_URL", "")
+    SUPABASE_ANON_KEY = st.secrets.get("SUPABASE_ANON_KEY", "")
     SUPABASE_TABLE = st.secrets.get("SUPABASE_TABLE", "option_snapshots")
     SUPABASE_TABLE_PCR = st.secrets.get("SUPABASE_TABLE_PCR", "strike_pcr_snapshots")
-    DHAN_CLIENT_ID = st.secrets["DHAN_CLIENT_ID"]
-    DHAN_ACCESS_TOKEN = st.secrets["DHAN_ACCESS_TOKEN"]
+
     # Telegram credentials (optional)
-    TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
-    TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+    try:
+        TELEGRAM_BOT_TOKEN = st.secrets["TELEGRAM"]["BOT_TOKEN"]
+        TELEGRAM_CHAT_ID = st.secrets["TELEGRAM"]["CHAT_ID"]
+    except:
+        TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", "")
+        TELEGRAM_CHAT_ID = st.secrets.get("TELEGRAM_CHAT_ID", "")
+
+    # Verify required credentials
+    if not DHAN_CLIENT_ID or not DHAN_ACCESS_TOKEN:
+        st.error("❌ Missing Dhan credentials. Please configure in .streamlit/secrets.toml")
+        st.info("Required: DHAN_CLIENT_ID and DHAN_ACCESS_TOKEN")
+        st.stop()
+
 except Exception as e:
-    st.error("❌ Missing credentials")
+    st.error(f"❌ Error loading credentials: {e}")
+    st.info("Please check your .streamlit/secrets.toml configuration")
     st.stop()
 
 try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    if SUPABASE_URL and SUPABASE_ANON_KEY:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+    else:
+        supabase = None
+        # Supabase is optional, don't show error
 except Exception as e:
-    st.error(f"❌ Supabase failed: {e}")
+    # Supabase is optional, just set to None and continue
     supabase = None
 
 DHAN_BASE_URL = "https://api.dhan.co"

@@ -37,6 +37,7 @@ from data_cache_manager import (
 )
 from vob_signal_generator import VOBSignalGenerator
 from htf_sr_signal_generator import HTFSRSignalGenerator
+from NiftyOptionScreener import render_nifty_option_screener
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -1711,14 +1712,15 @@ st.divider()
 # ═══════════════════════════════════════════════════════════════════════
 
 # Native tabs - work seamlessly on mobile and desktop, no multiple clicks needed
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "🌟 Overall Market Sentiment",
     "🎯 Trade Setup",
     "📊 Active Signals",
     "📈 Positions",
     "🎲 Bias Analysis Pro",
     "🔍 Option Chain Analysis",
-    "📉 Advanced Chart Analysis"
+    "📉 Advanced Chart Analysis",
+    "🎯 NIFTY Option Screener v7.0"
 ])
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -3498,6 +3500,13 @@ with tab7:
 
         **Note:** All indicators are converted from Pine Script with high accuracy and optimized for Python/Plotly.
         """)
+
+# ═══════════════════════════════════════════════════════════════════════
+# TAB 8: NIFTY OPTION SCREENER V7.0
+# ═══════════════════════════════════════════════════════════════════════
+
+with tab8:
+    render_nifty_option_screener()
 
 # ═══════════════════════════════════════════════════════════════════════
 # FOOTER
