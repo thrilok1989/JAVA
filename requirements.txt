@@ -9,3 +9,5 @@ streamlit-autorefresh
 aiohttp
 yfinance
 groq
+supabase
+python-dotenv
