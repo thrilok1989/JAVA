@@ -2610,19 +2610,17 @@ with tab5:
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab6:
-    st.header("🎯 Nifty Option Screener v7.0")
-    st.caption("100% SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR + EXPIRY SPIKE DETECTOR + ENHANCED OI/PCR ANALYTICS")
-
-    # Import and render the new Nifty Option Screener v7.0
-    try:
-        from NiftyOptionScreener import render_nifty_option_screener
-        render_nifty_option_screener()
-    except ImportError as e:
-        st.error(f"❌ Failed to load Nifty Option Screener v7.0: {e}")
-        st.info("Please ensure NiftyOptionScreener.py is in the project directory")
-    except Exception as e:
-        st.error(f"❌ Error rendering Nifty Option Screener: {e}")
-        st.exception(e)
+    st.header("🔍 Option Chain Analysis")
+    st.info("📌 The NIFTY Option Screener v7.0 has been moved to **Tab 8** for better organization.")
+    st.markdown("""
+    ### Available in Tab 8:
+    - 🎯 NIFTY Option Screener v7.0
+    - 100% SELLER'S PERSPECTIVE
+    - ATM BIAS ANALYZER
+    - MOMENT DETECTOR
+    - EXPIRY SPIKE DETECTOR
+    - ENHANCED OI/PCR ANALYTICS
+    """)
 
 # ═══════════════════════════════════════════════════════════════════════
 # TAB 7: ADVANCED CHART ANALYSIS
@@ -3441,7 +3439,19 @@ with tab7:
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab8:
-    render_nifty_option_screener()
+    st.header("🎯 NIFTY Option Screener v7.0")
+    st.caption("100% SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR + EXPIRY SPIKE DETECTOR + ENHANCED OI/PCR ANALYTICS")
+
+    # Import and render the Nifty Option Screener v7.0
+    try:
+        from NiftyOptionScreener import render_nifty_option_screener
+        render_nifty_option_screener()
+    except ImportError as e:
+        st.error(f"❌ Failed to load Nifty Option Screener v7.0: {e}")
+        st.info("Please ensure NiftyOptionScreener.py is in the project directory")
+    except Exception as e:
+        st.error(f"❌ Error rendering Nifty Option Screener: {e}")
+        st.exception(e)
 
 # ═══════════════════════════════════════════════════════════════════════
 # TAB 9: ENHANCED MARKET DATA
