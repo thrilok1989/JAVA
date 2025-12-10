@@ -1423,13 +1423,16 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
                 border-radius: 10px;
                 text-align: center;
             ">
-                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Sentiment</div>
+                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Breadth Sentiment</div>
                 <div style='font-size: 1.5rem; color:{sent_color}; font-weight:700; margin: 10px 0;'>
                     {sector_sentiment}
                 </div>
-                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Breadth</div>
+                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Breadth %</div>
                 <div style='font-size: 1.3rem; color:#ffcc00; font-weight:700; margin-top: 5px;'>
                     {sector_breadth:.1f}%
+                </div>
+                <div style='font-size: 0.7rem; color:#666; font-style: italic; margin-top: 3px;'>
+                    (% sectors bullish)
                 </div>
             </div>
             """, unsafe_allow_html=True)

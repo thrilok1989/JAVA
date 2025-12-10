@@ -276,8 +276,9 @@ def _render_sector_rotation_tab(enhanced_data: Dict[str, Any]):
         st.metric("Rotation Type", rotation['rotation_type'])
 
     with col2:
-        st.metric("Sector Breadth", f"{rotation['sector_breadth']:.1f}%")
-        st.metric("Sector Sentiment", rotation['sector_sentiment'])
+        st.metric("Sector Breadth %", f"{rotation['sector_breadth']:.1f}%",
+                 help="Percentage of sectors showing positive momentum")
+        st.metric("Sector Breadth Sentiment", rotation['sector_sentiment'])
 
     with col3:
         st.metric("Rotation Bias", rotation['rotation_bias'])
