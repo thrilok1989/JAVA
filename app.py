@@ -2633,7 +2633,7 @@ with tab6:
 
 with tab7:
     st.header("📈 Advanced Chart Analysis")
-    st.caption("TradingView-style Chart with 6 Advanced Indicators: Volume Bars, Volume Order Blocks, HTF Support/Resistance (3min, 5min, 10min, 15min levels), Volume Footprint (1D timeframe, 10 bins, Dynamic POC), Ultimate RSI, OM Indicator (Order Flow & Momentum)")
+    st.caption("TradingView-style Chart with Advanced Indicators: Volume Bars, Volume Order Blocks, HTF Support/Resistance (3min, 5min, 10min, 15min levels), Volume Footprint (1D timeframe, 10 bins, Dynamic POC), Ultimate RSI, OM Indicator (Order Flow & Momentum), Advanced Price Action (BOS, CHOCH, Fibonacci, Geometric Patterns)")
 
     # Chart controls
     col1, col2, col3, col4, col5 = st.columns([2, 1, 1, 1, 1])
@@ -2641,7 +2641,7 @@ with tab7:
     with col1:
         chart_symbol = st.selectbox(
             "Select Market",
-            ["^NSEI (NIFTY 50)", "^BSESN (SENSEX)", "^DJI (DOW JONES)"],
+            ["^NSEI (NIFTY 50)", "^NSEBANK (BANK NIFTY)", "^BSESN (SENSEX)", "^DJI (DOW JONES)"],
             key="chart_symbol"
         )
         symbol_code = chart_symbol.split()[0]
@@ -2770,6 +2770,22 @@ with tab7:
         show_volume = st.checkbox("📊 Volume Bars", value=True, key="show_volume")
         show_om = st.checkbox("🎯 OM Indicator", value=False, key="show_om")
         show_liquidity_profile = st.checkbox("💧 Liquidity Sentiment Profile", value=False, key="show_liquidity_profile")
+
+    # Advanced Price Action Indicators
+    st.markdown("**🎯 Advanced Price Action**")
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        show_bos = st.checkbox("🔺 BOS (Break of Structure)", value=True, key="show_bos")
+
+    with col2:
+        show_choch = st.checkbox("🔄 CHOCH (Change of Character)", value=True, key="show_choch")
+
+    with col3:
+        show_fibonacci = st.checkbox("📐 Fibonacci Levels", value=True, key="show_fibonacci")
+
+    with col4:
+        show_patterns = st.checkbox("📊 Geometric Patterns", value=True, key="show_patterns")
 
     st.divider()
 
@@ -3092,6 +3108,10 @@ with tab7:
                     show_om=show_om,
                     show_volume=show_volume,
                     show_liquidity_profile=show_liquidity_profile,
+                    show_bos=show_bos,
+                    show_choch=show_choch,
+                    show_fibonacci=show_fibonacci,
+                    show_patterns=show_patterns,
                     vob_params=vob_params,
                     htf_params=htf_params,
                     footprint_params=footprint_params,

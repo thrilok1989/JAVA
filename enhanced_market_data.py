@@ -108,7 +108,7 @@ class EnhancedMarketData:
         Returns:
             List of sector data with performance and bias
         """
-        sectors = ['NIFTY_IT', 'NIFTY_AUTO', 'NIFTY_PHARMA', 'NIFTY_METAL',
+        sectors = ['BANKNIFTY', 'NIFTY_IT', 'NIFTY_AUTO', 'NIFTY_PHARMA', 'NIFTY_METAL',
                    'NIFTY_REALTY', 'NIFTY_ENERGY', 'NIFTY_FMCG']
 
         sector_data = []
@@ -148,8 +148,15 @@ class EnhancedMarketData:
                             bias = "NEUTRAL"
                             score = 0
 
+                        # Format sector name for display
+                        display_name = sector
+                        if sector == 'BANKNIFTY':
+                            display_name = 'BANK NIFTY'
+                        else:
+                            display_name = sector.replace('NIFTY_', 'NIFTY ')
+
                         sector_data.append({
-                            'sector': sector.replace('NIFTY_', 'NIFTY '),
+                            'sector': display_name,
                             'last_price': last_price,
                             'open': open_price,
                             'high': sector_info.get('high', 0),
@@ -171,6 +178,7 @@ class EnhancedMarketData:
     def _fetch_sector_indices_yfinance(self) -> List[Dict[str, Any]]:
         """Fallback: Fetch sector indices from Yahoo Finance"""
         sectors_map = {
+            '^NSEBANK': 'BANK NIFTY',
             '^CNXIT': 'NIFTY IT',
             '^CNXAUTO': 'NIFTY AUTO',
             '^CNXPHARMA': 'NIFTY PHARMA',

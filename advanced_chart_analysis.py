@@ -59,6 +59,7 @@ class AdvancedChartAnalysis:
         # Map Yahoo Finance symbols to Dhan instruments
         symbol_map = {
             '^NSEI': 'NIFTY',
+            '^NSEBANK': 'BANKNIFTY',
             '^BSESN': 'SENSEX'
         }
 
