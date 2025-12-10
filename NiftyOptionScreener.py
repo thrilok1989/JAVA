@@ -3865,13 +3865,13 @@ def render_nifty_option_screener():
         st.markdown("---")
         
         # Save interval
-        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60)
+        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60, key="pcr_autosave_interval")
         
         # Telegram settings
         st.markdown("---")
         st.markdown("### 🤖 TELEGRAM SETTINGS")
-        auto_send = st.checkbox("Auto-send signals to Telegram", value=False)
-        show_signal_preview = st.checkbox("Show signal preview", value=True)
+        auto_send = st.checkbox("Auto-send signals to Telegram", value=False, key="auto_send_telegram")
+        show_signal_preview = st.checkbox("Show signal preview", value=True, key="show_signal_preview")
         
         if st.button("Clear Caches"):
             st.cache_data.clear()
@@ -3890,8 +3890,8 @@ def render_nifty_option_screener():
         if not expiries:
             st.error("Unable to fetch expiry list")
             st.stop()
-        
-        expiry = st.selectbox("Select expiry", expiries, index=0)
+
+        expiry = st.selectbox("Select expiry", expiries, index=0, key="expiry_selector")
     
     with col2:
         if spot > 0:
