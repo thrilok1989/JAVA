@@ -694,17 +694,18 @@ class EnhancedMarketData:
             rotation_bias = "NEUTRAL"
             rotation_score = 0
 
-        # Overall sector sentiment
+        # Overall sector sentiment (Based on Sector Breadth %)
+        # Updated thresholds to align better with technical bias (60% threshold)
         if sector_breadth > 70:
             sector_sentiment = "STRONG BULLISH"
             sector_score = 75
-        elif sector_breadth > 55:
+        elif sector_breadth >= 60:
             sector_sentiment = "BULLISH"
             sector_score = 50
         elif sector_breadth < 30:
             sector_sentiment = "STRONG BEARISH"
             sector_score = -75
-        elif sector_breadth < 45:
+        elif sector_breadth <= 40:
             sector_sentiment = "BEARISH"
             sector_score = -50
         else:

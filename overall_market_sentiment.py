@@ -1158,6 +1158,17 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     st.markdown("## 📊 BIAS METRICS SUMMARY")
     st.caption("Comprehensive bias analysis from PCR, ATM Strikes, and Sector Rotation")
 
+    # Add informational box explaining different bias metrics
+    st.info("""
+    **📌 Understanding Different Bias Metrics:**
+
+    - **Sector Breadth Sentiment**: Based on % of sectors showing positive momentum (threshold: 60% for BULLISH, 40% for BEARISH)
+    - **Technical Indicator Bias**: Based on 8 technical indicators (RSI, DMI, VIDYA, MFI, Volume Delta, HVP, VOB, Order Blocks) - requires 60% agreement for BULLISH/BEARISH
+    - **Rotation Bias**: Based on which sectors are leading (defensive vs cyclical)
+
+    These metrics measure different aspects and may show different signals during market transitions.
+    """)
+
     # ─────────────────────────────────────────────────────────────────
     # 1. PUT-CALL RATIO (PCR) BIAS
     # ─────────────────────────────────────────────────────────────────
@@ -1416,15 +1427,18 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                         <strong>Pattern:</strong> {rotation_pattern}
                     </div>
                     <div style='font-size: 16px; color: white;'>
-                        <strong>Sentiment:</strong> {sector_sentiment}
+                        <strong>Breadth Sentiment:</strong> {sector_sentiment}
                     </div>
                 </div>
                 <div>
-                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>SECTOR BREADTH</div>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>SECTOR BREADTH %</div>
                     <div style='font-size: 36px; font-weight: bold; color: {rotation_color};'>{sector_breadth:.1f}%</div>
                     <div style='font-size: 12px; color: #888; margin-top: 5px;'>
                         Bullish: {sector_rotation_data.get('bullish_sectors_count', 0)} |
                         Bearish: {sector_rotation_data.get('bearish_sectors_count', 0)}
+                    </div>
+                    <div style='font-size: 10px; color: #666; font-style: italic; margin-top: 3px;'>
+                        (% of sectors showing positive momentum)
                     </div>
                 </div>
             </div>
