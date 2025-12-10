@@ -4168,55 +4168,6 @@ def render_nifty_option_screener():
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
-    # Row 2: PCR Card with detailed interpretation
-    st.markdown(f"""
-    <div style="
-        background: linear-gradient(135deg, #1a1f2e 0%, #2a2f3e 100%);
-        padding: 20px;
-        border-radius: 12px;
-        border: 2px solid {oi_pcr_metrics['pcr_color']};
-        margin: 15px 0;
-    ">
-        <h3 style='color:{oi_pcr_metrics["pcr_color"]}; margin:0 0 10px 0;'>🎯 PUT-CALL RATIO (PCR) ANALYSIS</h3>
-        
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0;">
-            <div style='text-align: center;'>
-                <div style='font-size: 0.9rem; color:#cccccc;'>Sentiment</div>
-                <div style='font-size: 1.3rem; color:{oi_pcr_metrics["pcr_color"]}; font-weight:700;'>
-                    {oi_pcr_metrics['pcr_sentiment']}
-                </div>
-            </div>
-            
-            <div style='text-align: center;'>
-                <div style='font-size: 0.9rem; color:#cccccc;'>PCR Change</div>
-                <div style='font-size: 1.3rem; color:#ffcc00; font-weight:700;'>
-                    {oi_pcr_metrics['pcr_chg']:+.2f}
-                </div>
-            </div>
-            
-            <div style='text-align: center;'>
-                <div style='font-size: 0.9rem; color:#cccccc;'>OI Momentum</div>
-                <div style='font-size: 1.3rem; color:#ff00ff; font-weight:700;'>
-                    {oi_pcr_metrics['oi_momentum']:+.1f}%
-                </div>
-            </div>
-            
-            <div style='text-align: center;'>
-                <div style='font-size: 0.9rem; color:#cccccc;'>CE:PE Ratio</div>
-                <div style='font-size: 1.3rem; color:#66b3ff; font-weight:700;'>
-                    {oi_pcr_metrics['ce_pe_ratio']:.2f}:1
-                </div>
-            </div>
-        </div>
-        
-        <div style='color:#ffffff; font-size: 1rem; margin-top: 10px;'>
-            <strong>Interpretation:</strong> {oi_pcr_metrics['oi_change_interpretation']}
-            {'. ' + oi_pcr_metrics['chg_interpretation'] if oi_pcr_metrics['chg_interpretation'] else ''}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
     # Row 3: Concentration Analysis
     st.markdown("### 🎯 OI CONCENTRATION & SKEW")
     
