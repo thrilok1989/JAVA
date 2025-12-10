@@ -4204,9 +4204,8 @@ def render_nifty_option_screener():
         st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
 
         # Main spike card
-        if expiry_spike_data["active"]:
-            spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
-        
+        spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
+
         with spike_col1:
             st.markdown(f"""
             <div style="
