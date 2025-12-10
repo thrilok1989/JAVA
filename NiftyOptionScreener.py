@@ -3656,12 +3656,31 @@ def render_nifty_option_screener():
     # ============================================
     # 📊 COMPREHENSIVE OI & PCR DASHBOARD
     # ============================================
-    
+
     # Run OI/PCR analysis
     oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
-    
+
     st.markdown("---")
-    st.markdown("## 📊 ENHANCED OI & PCR ANALYTICS DASHBOARD")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # CREATE SUB-TABS FOR ORGANIZED CONTENT
+    # ═══════════════════════════════════════════════════════════════════
+
+    screener_tabs = st.tabs([
+        "📊 OI/PCR Analytics",
+        "🎯 ATM Bias Analyzer",
+        "🎪 Seller's Perspective",
+        "🚀 Moment Detector",
+        "📅 Expiry Analysis",
+        "📱 Telegram Signals"
+    ])
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 1: OI/PCR ANALYTICS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[0]:
+        st.markdown("## 📊 ENHANCED OI & PCR ANALYTICS DASHBOARD")
     
     # Row 1: Totals
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
@@ -3843,37 +3862,44 @@ def render_nifty_option_screener():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display ATM Bias Dashboard
-    if atm_bias or support_bias or resistance_bias:
-        display_bias_dashboard(atm_bias, support_bias, resistance_bias)
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 2: ATM BIAS ANALYZER
+    # ═══════════════════════════════════════════════════════════════════
 
-    # ============================================
-    # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
-    # ============================================
+    with screener_tabs[1]:
+        st.markdown("## 🎯 ATM BIAS ANALYZER")
 
-    # Create ATM ±2 strikes tabulation
-    strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+        # Display ATM Bias Dashboard
+        if atm_bias or support_bias or resistance_bias:
+            display_bias_dashboard(atm_bias, support_bias, resistance_bias)
 
-    # Calculate expiry spike data early for the summary
-    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+        # ============================================
+        # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
+        # ============================================
 
-    # Display the reorganized Overall Market Sentiment Summary Dashboard
-    display_overall_market_sentiment_summary(
-        overall_bias=overall_bias,
-        atm_bias=atm_bias,
-        seller_max_pain=seller_max_pain,
-        total_gex_net=total_gex_net,
-        expiry_spike_data=expiry_spike_data,
-        oi_pcr_metrics=oi_pcr_metrics,
-        strike_analyses=strike_analyses
-    )
+        # Create ATM ±2 strikes tabulation
+        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+
+        # Calculate expiry spike data early for the summary
+        expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+        # Display the reorganized Overall Market Sentiment Summary Dashboard
+        display_overall_market_sentiment_summary(
+            overall_bias=overall_bias,
+            atm_bias=atm_bias,
+            seller_max_pain=seller_max_pain,
+            total_gex_net=total_gex_net,
+            expiry_spike_data=expiry_spike_data,
+            oi_pcr_metrics=oi_pcr_metrics,
+            strike_analyses=strike_analyses
+        )
 
     # ============================================
     # 📅 EXPIRY SPIKE DETECTION
     # ============================================
 
     # Expiry spike data already calculated above for the summary dashboard
-    
+
     # Advanced spike detection (optional)
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
     gamma_spike_risk = calculate_gamma_exposure_spike(total_gex_net, days_to_expiry)
@@ -3882,25 +3908,25 @@ def render_nifty_option_screener():
         nearest_sup["strike"] if nearest_sup else None,
         nearest_res["strike"] if nearest_res else None
     )
-    
+
     # Check for new Telegram signal
     telegram_signal = check_and_send_signal(
-        entry_signal, spot, seller_bias_result, 
-        seller_max_pain, nearest_sup, nearest_res, 
+        entry_signal, spot, seller_bias_result,
+        seller_max_pain, nearest_sup, nearest_res,
         moment_metrics, seller_breakout_index, expiry, expiry_spike_data,
         atm_bias, support_bias, resistance_bias
     )
-    
-    # ============================================
-    # 📅 EXPIRY DATE SPIKE DETECTOR UI
-    # ============================================
-    
-    st.markdown("---")
-    st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
-    
-    # Main spike card
-    if expiry_spike_data["active"]:
-        spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 4: EXPIRY ANALYSIS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[4]:
+        st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
+
+        # Main spike card
+        if expiry_spike_data["active"]:
+            spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
         
         with spike_col1:
             st.markdown(f"""
@@ -4087,15 +4113,16 @@ def render_nifty_option_screener():
         *Check back closer to expiry for spike alerts*
         """)
     
-    # ============================================
-    # 🚀 TELEGRAM SIGNAL SECTION
-    # ============================================
-    st.markdown("---")
-    st.markdown("## 📱 TELEGRAM SIGNAL GENERATION (Option 3 Format)")
-    
-    if telegram_signal:
-        # NEW SIGNAL DETECTED
-        st.success("🎯 **NEW TRADE SIGNAL GENERATED!**")
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 5: TELEGRAM SIGNALS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[5]:
+        st.markdown("## 📱 TELEGRAM SIGNAL GENERATION (Option 3 Format)")
+
+        if telegram_signal:
+            # NEW SIGNAL DETECTED
+            st.success("🎯 **NEW TRADE SIGNAL GENERATED!**")
         
         # Auto-send to Telegram if enabled
         if auto_send and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
@@ -4217,95 +4244,95 @@ def render_nifty_option_screener():
         if "last_signal" in st.session_state and st.session_state["last_signal"]:
             st.info(f"📝 Last signal was: {st.session_state['last_signal']}")
     
-    # ============================================
-    # 🚀 MOMENT DETECTOR DISPLAY
-    # ============================================
-    
-    st.markdown("---")
-    st.markdown("## 🚀 MOMENT DETECTOR (Is this a real move?)")
-    
-    moment_col1, moment_col2, moment_col3, moment_col4 = st.columns(4)
-    
-    with moment_col1:
-        mb = moment_metrics["momentum_burst"]
-        if mb["available"]:
-            color = "#ff00ff" if mb["score"] > 70 else ("#ff9900" if mb["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>💥 MOMENTUM BURST</h4>
-                <div class="moment-value" style="color:{color}">{mb["score"]}/100</div>
-                <div class="sub-info">{mb["note"]}</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>💥 MOMENTUM BURST</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Need more refresh points</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col2:
-        ob = moment_metrics["orderbook"]
-        if ob["available"]:
-            pressure = ob["pressure"]
-            color = "#00ff88" if pressure > 0.15 else ("#ff4444" if pressure < -0.15 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>📊 ORDERBOOK PRESSURE</h4>
-                <div class="moment-value" style="color:{color}">{pressure:+.2f}</div>
-                <div class="sub-info">Buy/Sell imbalance</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>📊 ORDERBOOK PRESSURE</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Depth data unavailable</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col3:
-        gc = moment_metrics["gamma_cluster"]
-        if gc["available"]:
-            color = "#ff00ff" if gc["score"] > 70 else ("#ff9900" if gc["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>🌀 GAMMA CLUSTER</h4>
-                <div class="moment-value" style="color:{color}">{gc["score"]}/100</div>
-                <div class="sub-info">ATM ±2 concentration</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>🌀 GAMMA CLUSTER</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Data unavailable</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col4:
-        oi = moment_metrics["oi_accel"]
-        if oi["available"]:
-            color = "#ff00ff" if oi["score"] > 70 else ("#ff9900" if oi["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>⚡ OI ACCELERATION</h4>
-                <div class="moment-value" style="color:{color}">{oi["score"]}/100</div>
-                <div class="sub-info">{oi["note"]}</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>⚡ OI ACCELERATION</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Need more refresh points</div>
-            </div>
-            ''', unsafe_allow_html=True)
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 3: MOMENT DETECTOR
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[3]:
+        st.markdown("## 🚀 MOMENT DETECTOR (Is this a real move?)")
+
+        moment_col1, moment_col2, moment_col3, moment_col4 = st.columns(4)
+
+        with moment_col1:
+            mb = moment_metrics["momentum_burst"]
+            if mb["available"]:
+                color = "#ff00ff" if mb["score"] > 70 else ("#ff9900" if mb["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>💥 MOMENTUM BURST</h4>
+                    <div class="moment-value" style="color:{color}">{mb["score"]}/100</div>
+                    <div class="sub-info">{mb["note"]}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>💥 MOMENTUM BURST</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Need more refresh points</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col2:
+            ob = moment_metrics["orderbook"]
+            if ob["available"]:
+                pressure = ob["pressure"]
+                color = "#00ff88" if pressure > 0.15 else ("#ff4444" if pressure < -0.15 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>📊 ORDERBOOK PRESSURE</h4>
+                    <div class="moment-value" style="color:{color}">{pressure:+.2f}</div>
+                    <div class="sub-info">Buy/Sell imbalance</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>📊 ORDERBOOK PRESSURE</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Depth data unavailable</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col3:
+            gc = moment_metrics["gamma_cluster"]
+            if gc["available"]:
+                color = "#ff00ff" if gc["score"] > 70 else ("#ff9900" if gc["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>🌀 GAMMA CLUSTER</h4>
+                    <div class="moment-value" style="color:{color}">{gc["score"]}/100</div>
+                    <div class="sub-info">ATM ±2 concentration</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>🌀 GAMMA CLUSTER</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Data unavailable</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col4:
+            oi = moment_metrics["oi_accel"]
+            if oi["available"]:
+                color = "#ff00ff" if oi["score"] > 70 else ("#ff9900" if oi["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>⚡ OI ACCELERATION</h4>
+                    <div class="moment-value" style="color:{color}">{oi["score"]}/100</div>
+                    <div class="sub-info">{oi["note"]}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>⚡ OI ACCELERATION</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Need more refresh points</div>
+                </div>
+                ''', unsafe_allow_html=True)
     
     # ============================================
     # 🎯 SUPER PROMINENT ENTRY SIGNAL
@@ -4705,44 +4732,47 @@ def render_nifty_option_screener():
     
     st.markdown("---")
     
-    # ============================================
-    # 🎯 SELLER'S BIAS
-    # ============================================
-    
-    st.markdown(f"""
-    <div class='seller-bias-box'>
-        <h3>🎯 SELLER'S MARKET BIAS</h3>
-        <div class='bias-value' style='color:{seller_bias_result["color"]}'>
-            {seller_bias_result["bias"]}
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 2: SELLER'S PERSPECTIVE
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[2]:
+        st.markdown("## 🎪 SELLER'S PERSPECTIVE")
+
+        st.markdown(f"""
+        <div class='seller-bias-box'>
+            <h3>🎯 SELLER'S MARKET BIAS</h3>
+            <div class='bias-value' style='color:{seller_bias_result["color"]}'>
+                {seller_bias_result["bias"]}
+            </div>
+            <p>Polarity Score: {seller_bias_result["polarity"]:.2f}</p>
         </div>
-        <p>Polarity Score: {seller_bias_result["polarity"]:.2f}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div class='seller-explanation'>
-        <h4>🧠 SELLER'S THINKING:</h4>
-        <p><strong>{seller_bias_result["explanation"]}</strong></p>
-        <p><strong>Action:</strong> {seller_bias_result["action"]}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Core Metrics with OI/PCR
-    st.markdown("## 📈 SELLER'S MARKET OVERVIEW")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Spot", f"₹{spot:.2f}")
-        st.metric("ATM", f"₹{atm_strike}")
-    with col2:
-        st.metric("CALL Sellers", f"{ce_selling} strikes")
-        st.metric("PUT Sellers", f"{pe_selling} strikes")
-    with col3:
-        st.metric("PCR", f"{oi_pcr_metrics['pcr_total']:.2f}")
-        st.metric("PCR Sentiment", oi_pcr_metrics['pcr_sentiment'])
-    with col4:
-        st.metric("Total GEX", f"₹{int(total_gex_net):,}")
-        st.metric("Breakout Index", f"{seller_breakout_index}%")
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class='seller-explanation'>
+            <h4>🧠 SELLER'S THINKING:</h4>
+            <p><strong>{seller_bias_result["explanation"]}</strong></p>
+            <p><strong>Action:</strong> {seller_bias_result["action"]}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Core Metrics with OI/PCR
+        st.markdown("### 📈 SELLER'S MARKET OVERVIEW")
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Spot", f"₹{spot:.2f}")
+            st.metric("ATM", f"₹{atm_strike}")
+        with col2:
+            st.metric("CALL Sellers", f"{ce_selling} strikes")
+            st.metric("PUT Sellers", f"{pe_selling} strikes")
+        with col3:
+            st.metric("PCR", f"{oi_pcr_metrics['pcr_total']:.2f}")
+            st.metric("PCR Sentiment", oi_pcr_metrics['pcr_sentiment'])
+        with col4:
+            st.metric("Total GEX", f"₹{int(total_gex_net):,}")
+            st.metric("Breakout Index", f"{seller_breakout_index}%")
     
     # Max Pain Display
     if seller_max_pain:
