@@ -1204,38 +1204,7 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias, atm_bias_plu
                 """, unsafe_allow_html=True)
 
         with col2:
-            if atm_bias_plus3:
-                st.markdown("### 📊 ATM ±3 BIAS DETAILED BREAKDOWN")
-
-                bias_data = []
-                for bias_name, emoji in atm_bias_plus3["bias_emojis"].items():
-                    bias_data.append({
-                        "Metric": bias_name.replace("_", " ").title(),
-                        "Bias": emoji,
-                        "Score": f"{atm_bias_plus3['bias_scores'][bias_name]:.1f}",
-                        "Interpretation": atm_bias_plus3["bias_interpretations"][bias_name]
-                    })
-
-                bias_df = pd.DataFrame(bias_data)
-                st.dataframe(bias_df, use_container_width=True, height=400)
-
-                # ATM ±3 Bias Summary
-                st.markdown(f"""
-                <div class='seller-explanation'>
-                    <h4>🎯 ATM ±3 BIAS SUMMARY</h4>
-                    <p><strong>Overall Verdict:</strong> <span style='color:{atm_bias_plus3["verdict_color"]}'>{atm_bias_plus3["verdict"]}</span></p>
-                    <p><strong>Total Score:</strong> {atm_bias_plus3["total_score"]:.2f}</p>
-                    <p><strong>Explanation:</strong> {atm_bias_plus3["verdict_explanation"]}</p>
-                    <p><strong>Key Insights:</strong></p>
-                    <ul>
-                        <li>CALL OI: {atm_bias_plus3['metrics']['ce_oi']:,} | PUT OI: {atm_bias_plus3['metrics']['pe_oi']:,}</li>
-                        <li>PCR Ratio: {atm_bias_plus3['metrics']['pcr']:.2f}</li>
-                        <li>Net Delta: {atm_bias_plus3['metrics']['net_delta']:.3f} | Net Gamma: {atm_bias_plus3['metrics']['net_gamma']:.3f}</li>
-                        <li>Delta Exposure: ₹{atm_bias_plus3['metrics']['delta_exposure']:,}</li>
-                        <li>Gamma Exposure: ₹{atm_bias_plus3['metrics']['gamma_exposure']:,}</li>
-                    </ul>
-                </div>
-                """, unsafe_allow_html=True)
+            pass
     
     # Trading Implications
     st.markdown("### 💡 TRADING IMPLICATIONS")
