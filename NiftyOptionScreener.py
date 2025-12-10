@@ -1266,6 +1266,454 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias, atm_bias_plu
         st.markdown(f"- {imp}")
 
 # ============================================
+# 📊 ATM ±2 STRIKES DETAILED TABULATION
+# ============================================
+
+def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
+    """
+    Calculate 11 bias metrics for a single strike
+    Returns: dict with bias scores, emojis, and interpretations for one strike
+    """
+    bias_scores = {}
+    bias_emojis = {}
+    bias_interpretations = {}
+
+    # Extract data for this strike
+    ce_oi = strike_data.get("OI_CE", 0)
+    pe_oi = strike_data.get("OI_PE", 0)
+    ce_chg = strike_data.get("Chg_OI_CE", 0)
+    pe_chg = strike_data.get("Chg_OI_PE", 0)
+    ce_vol = strike_data.get("Vol_CE", 0)
+    pe_vol = strike_data.get("Vol_PE", 0)
+    ce_ltp = strike_data.get("LTP_CE", 0)
+    pe_ltp = strike_data.get("LTP_PE", 0)
+    ce_iv = strike_data.get("IV_CE", 0)
+    pe_iv = strike_data.get("IV_PE", 0)
+
+    # 1. OI BIAS
+    oi_ratio = pe_oi / max(ce_oi, 1)
+    if oi_ratio > 1.3:
+        bias_scores["OI"] = 1
+        bias_emojis["OI"] = "🐂"
+    elif oi_ratio < 0.77:
+        bias_scores["OI"] = -1
+        bias_emojis["OI"] = "🐻"
+    else:
+        bias_scores["OI"] = 0
+        bias_emojis["OI"] = "⚖️"
+    bias_interpretations["OI"] = f"PE/CE OI: {oi_ratio:.2f}"
+
+    # 2. CHANGE IN OI BIAS
+    if ce_chg > 0 and pe_chg > 0:
+        chg_ratio = pe_chg / max(ce_chg, 1)
+        if chg_ratio > 1.2:
+            bias_scores["ChgOI"] = 1
+            bias_emojis["ChgOI"] = "🐂"
+        elif chg_ratio < 0.83:
+            bias_scores["ChgOI"] = -1
+            bias_emojis["ChgOI"] = "🐻"
+        else:
+            bias_scores["ChgOI"] = 0
+            bias_emojis["ChgOI"] = "⚖️"
+    elif pe_chg > 0:
+        bias_scores["ChgOI"] = 1
+        bias_emojis["ChgOI"] = "🐂"
+    elif ce_chg > 0:
+        bias_scores["ChgOI"] = -1
+        bias_emojis["ChgOI"] = "🐻"
+    else:
+        bias_scores["ChgOI"] = 0
+        bias_emojis["ChgOI"] = "⚖️"
+    bias_interpretations["ChgOI"] = f"CE:{ce_chg:,.0f} PE:{pe_chg:,.0f}"
+
+    # 3. VOLUME BIAS
+    vol_ratio = pe_vol / max(ce_vol, 1)
+    if vol_ratio > 1.2:
+        bias_scores["Volume"] = 1
+        bias_emojis["Volume"] = "🐂"
+    elif vol_ratio < 0.83:
+        bias_scores["Volume"] = -1
+        bias_emojis["Volume"] = "🐻"
+    else:
+        bias_scores["Volume"] = 0
+        bias_emojis["Volume"] = "⚖️"
+    bias_interpretations["Volume"] = f"PE/CE Vol: {vol_ratio:.2f}"
+
+    # 4. DELTA BIAS (simplified - based on position relative to ATM)
+    if strike_price < atm_strike:
+        # ITM Call, OTM Put - bullish if PE OI > CE OI
+        delta_bias = 1 if pe_oi > ce_oi else -0.5
+    elif strike_price > atm_strike:
+        # OTM Call, ITM Put - bearish if CE OI > PE OI
+        delta_bias = -1 if ce_oi > pe_oi else 0.5
+    else:
+        # ATM
+        delta_bias = 1 if pe_oi > ce_oi * 1.2 else (-1 if ce_oi > pe_oi * 1.2 else 0)
+
+    bias_scores["Delta"] = delta_bias
+    bias_emojis["Delta"] = "🐂" if delta_bias > 0 else ("🐻" if delta_bias < 0 else "⚖️")
+    bias_interpretations["Delta"] = f"Position: {'ITM' if abs(strike_price - atm_strike) < 50 else 'OTM'}"
+
+    # 5. GAMMA BIAS (highest at ATM)
+    distance_from_atm = abs(strike_price - atm_strike)
+    if distance_from_atm == 0:
+        gamma_score = 1 if pe_oi > ce_oi else -1
+    else:
+        gamma_score = 0.5 if pe_oi > ce_oi else -0.5
+
+    bias_scores["Gamma"] = gamma_score
+    bias_emojis["Gamma"] = "🐂" if gamma_score > 0 else ("🐻" if gamma_score < 0 else "⚖️")
+    bias_interpretations["Gamma"] = f"ATM Distance: {distance_from_atm}"
+
+    # 6. PREMIUM BIAS
+    premium_ratio = pe_ltp / max(ce_ltp, 0.01)
+    if premium_ratio > 1.5:
+        bias_scores["Premium"] = 1
+        bias_emojis["Premium"] = "🐂"
+    elif premium_ratio < 0.67:
+        bias_scores["Premium"] = -1
+        bias_emojis["Premium"] = "🐻"
+    else:
+        bias_scores["Premium"] = 0
+        bias_emojis["Premium"] = "⚖️"
+    bias_interpretations["Premium"] = f"PE/CE Premium: {premium_ratio:.2f}"
+
+    # 7. IV BIAS
+    iv_diff = pe_iv - ce_iv
+    if iv_diff > 2:
+        bias_scores["IV"] = 1
+        bias_emojis["IV"] = "🐂"
+    elif iv_diff < -2:
+        bias_scores["IV"] = -1
+        bias_emojis["IV"] = "🐻"
+    else:
+        bias_scores["IV"] = 0
+        bias_emojis["IV"] = "⚖️"
+    bias_interpretations["IV"] = f"PE-CE IV: {iv_diff:.2f}%"
+
+    # 8. DELTA EXPOSURE (OI-weighted delta)
+    ce_delta_exp = ce_oi * 0.5  # Simplified delta
+    pe_delta_exp = pe_oi * (-0.5)
+    net_delta_exp = ce_delta_exp + pe_delta_exp
+
+    if net_delta_exp > 0:
+        bias_scores["DeltaExp"] = -1
+        bias_emojis["DeltaExp"] = "🐻"
+    elif net_delta_exp < 0:
+        bias_scores["DeltaExp"] = 1
+        bias_emojis["DeltaExp"] = "🐂"
+    else:
+        bias_scores["DeltaExp"] = 0
+        bias_emojis["DeltaExp"] = "⚖️"
+    bias_interpretations["DeltaExp"] = f"Net ΔExp: {net_delta_exp:,.0f}"
+
+    # 9. GAMMA EXPOSURE (OI-weighted gamma)
+    gamma = 0.01  # Simplified
+    ce_gamma_exp = ce_oi * gamma
+    pe_gamma_exp = pe_oi * gamma
+    net_gamma_exp = ce_gamma_exp - pe_gamma_exp
+
+    if net_gamma_exp > 0:
+        bias_scores["GammaExp"] = -1
+        bias_emojis["GammaExp"] = "🐻"
+    elif net_gamma_exp < 0:
+        bias_scores["GammaExp"] = 1
+        bias_emojis["GammaExp"] = "🐂"
+    else:
+        bias_scores["GammaExp"] = 0
+        bias_emojis["GammaExp"] = "⚖️"
+    bias_interpretations["GammaExp"] = f"Net γExp: {net_gamma_exp:,.0f}"
+
+    # 10. IV SKEW BIAS
+    avg_iv = (ce_iv + pe_iv) / 2
+    if avg_iv > 18:
+        bias_scores["IVSkew"] = -0.5
+        bias_emojis["IVSkew"] = "🐻"
+    elif avg_iv < 12:
+        bias_scores["IVSkew"] = 0.5
+        bias_emojis["IVSkew"] = "🐂"
+    else:
+        bias_scores["IVSkew"] = 0
+        bias_emojis["IVSkew"] = "⚖️"
+    bias_interpretations["IVSkew"] = f"Avg IV: {avg_iv:.2f}%"
+
+    # 11. OI CHANGE RATE (acceleration)
+    total_oi = ce_oi + pe_oi
+    total_chg = abs(ce_chg) + abs(pe_chg)
+    chg_rate = total_chg / max(total_oi, 1) * 100
+
+    if chg_rate > 5:
+        if pe_chg > ce_chg:
+            bias_scores["OIChgRate"] = 1
+            bias_emojis["OIChgRate"] = "🐂"
+        else:
+            bias_scores["OIChgRate"] = -1
+            bias_emojis["OIChgRate"] = "🐻"
+    else:
+        bias_scores["OIChgRate"] = 0
+        bias_emojis["OIChgRate"] = "⚖️"
+    bias_interpretations["OIChgRate"] = f"Chg Rate: {chg_rate:.2f}%"
+
+    # Calculate overall verdict for this strike
+    total_bias = sum(bias_scores.values())
+    if total_bias >= 3:
+        verdict = "🐂 STRONG BULLISH"
+        verdict_color = "#00FF00"
+    elif total_bias >= 1:
+        verdict = "🐂 Bullish"
+        verdict_color = "#90EE90"
+    elif total_bias <= -3:
+        verdict = "🐻 STRONG BEARISH"
+        verdict_color = "#FF0000"
+    elif total_bias <= -1:
+        verdict = "🐻 Bearish"
+        verdict_color = "#FFA07A"
+    else:
+        verdict = "⚖️ Neutral"
+        verdict_color = "#FFD700"
+
+    return {
+        "strike_price": strike_price,
+        "bias_scores": bias_scores,
+        "bias_emojis": bias_emojis,
+        "bias_interpretations": bias_interpretations,
+        "total_bias": total_bias,
+        "verdict": verdict,
+        "verdict_color": verdict_color
+    }
+
+
+def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
+    """
+    Create tabulation for ATM ±2 strikes with 11 bias metrics each
+    Returns: list of strike analyses
+    """
+    strike_analyses = []
+
+    # Get ATM ±2 strikes
+    for offset in [-2, -1, 0, 1, 2]:
+        strike_price = atm_strike + (offset * strike_gap)
+
+        # Get data for this strike
+        strike_row = merged_df[merged_df["strikePrice"] == strike_price]
+
+        if not strike_row.empty:
+            strike_data = strike_row.iloc[0].to_dict()
+            analysis = analyze_individual_strike_bias(strike_data, strike_price, atm_strike)
+            strike_analyses.append(analysis)
+
+    return strike_analyses
+
+
+def display_atm_strikes_tabulation(strike_analyses, atm_strike):
+    """
+    Display the ATM ±2 strikes tabulation with 11 bias metrics
+    Highlights ATM strike prominently
+    """
+    if not strike_analyses:
+        st.warning("⚠️ No strike data available for tabulation")
+        return
+
+    st.markdown("### 📊 ATM ±2 Strikes - 11 Bias Metrics Tabulation")
+
+    # Create header row
+    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "Verdict"]
+
+    # Build HTML table
+    html = '<div style="overflow-x: auto;"><table style="width:100%; border-collapse: collapse; font-size: 12px;">'
+
+    # Header
+    html += '<tr style="background-color: #1e1e1e; color: white;">'
+    for metric in metrics:
+        html += f'<th style="padding: 8px; border: 1px solid #444; text-align: center;">{metric}</th>'
+    html += '</tr>'
+
+    # Data rows
+    for analysis in strike_analyses:
+        strike = analysis["strike_price"]
+        is_atm = (strike == atm_strike)
+
+        # Highlight ATM row
+        if is_atm:
+            row_style = 'background-color: #FFD700; color: #000; font-weight: bold;'
+        else:
+            row_style = 'background-color: #2d2d2d; color: #fff;'
+
+        html += f'<tr style="{row_style}">'
+
+        # Strike price
+        html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center; font-weight: bold;">{strike}</td>'
+
+        # 11 bias metrics
+        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate"]:
+            emoji = analysis["bias_emojis"].get(metric, "⚖️")
+            score = analysis["bias_scores"].get(metric, 0)
+            html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center;">{emoji}<br/><small>{score:+.1f}</small></td>'
+
+        # Verdict
+        verdict_color = analysis["verdict_color"]
+        verdict = analysis["verdict"]
+        html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center; background-color: {verdict_color}; font-weight: bold;">{verdict}</td>'
+
+        html += '</tr>'
+
+    html += '</table></div>'
+
+    st.markdown(html, unsafe_allow_html=True)
+
+    # Add expandable detailed breakdown for ATM strike
+    with st.expander("🔍 Detailed ATM Strike Breakdown"):
+        atm_analysis = next((a for a in strike_analyses if a["strike_price"] == atm_strike), None)
+        if atm_analysis:
+            st.markdown(f"**ATM Strike: {atm_strike}**")
+            st.markdown(f"**Total Bias Score: {atm_analysis['total_bias']:+.1f}**")
+            st.markdown(f"**Overall Verdict: {atm_analysis['verdict']}**")
+            st.markdown("---")
+            for metric, interpretation in atm_analysis["bias_interpretations"].items():
+                emoji = atm_analysis["bias_emojis"][metric]
+                score = atm_analysis["bias_scores"][metric]
+                st.markdown(f"**{metric}**: {emoji} {score:+.1f} - {interpretation}")
+
+
+def display_overall_market_sentiment_summary(overall_bias, atm_bias, atm_bias_plus3, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses):
+    """
+    Display a consolidated dashboard of the most important market sentiment indicators
+    Organized in a clean tabulation format
+    """
+    st.markdown("---")
+    st.markdown("## 📈 OVERALL MARKET SENTIMENT SUMMARY")
+    st.markdown("*Consolidated view of essential option chain metrics*")
+    st.markdown("---")
+
+    # Row 1: Key Indicators
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown("### 🎯 Overall Bias")
+        if overall_bias:
+            verdict = overall_bias.get("verdict", "N/A")
+            score = overall_bias.get("combined_score", 0)
+
+            if "BULLISH" in verdict.upper():
+                color = "#00FF00"
+            elif "BEARISH" in verdict.upper():
+                color = "#FF0000"
+            else:
+                color = "#FFD700"
+
+            st.markdown(f'<div style="background-color: {color}; padding: 15px; border-radius: 10px; text-align: center;">'
+                       f'<h2 style="margin: 0; color: #000;">{verdict}</h2>'
+                       f'<p style="margin: 5px 0 0 0; color: #000;">Score: {score:+.2f}</p>'
+                       f'</div>', unsafe_allow_html=True)
+        else:
+            st.info("No overall bias data")
+
+    with col2:
+        st.markdown("### 💰 Max Pain (Sellers)")
+        if seller_max_pain:
+            max_pain_strike = seller_max_pain.get("max_pain_strike", "N/A")
+            total_cost = seller_max_pain.get("total_cost", 0)
+
+            st.markdown(f'<div style="background-color: #FF6347; padding: 15px; border-radius: 10px; text-align: center;">'
+                       f'<h2 style="margin: 0; color: #fff;">{max_pain_strike}</h2>'
+                       f'<p style="margin: 5px 0 0 0; color: #fff;">Cost: ₹{total_cost/1e7:.2f}Cr</p>'
+                       f'</div>', unsafe_allow_html=True)
+        else:
+            st.info("No max pain data")
+
+    with col3:
+        st.markdown("### ⚡ GEX Analysis")
+        if total_gex_net is not None:
+            gex_sentiment = "🐂 Bullish Support" if total_gex_net > 0 else "🐻 Bearish Pressure"
+            color = "#00FF00" if total_gex_net > 0 else "#FF0000"
+
+            st.markdown(f'<div style="background-color: {color}; padding: 15px; border-radius: 10px; text-align: center;">'
+                       f'<h3 style="margin: 0; color: #000;">{gex_sentiment}</h3>'
+                       f'<p style="margin: 5px 0 0 0; color: #000;">Net GEX: {total_gex_net:,.0f}</p>'
+                       f'</div>', unsafe_allow_html=True)
+        else:
+            st.info("No GEX data")
+
+    st.markdown("---")
+
+    # Row 2: ATM ±2 Strike Tabulation
+    st.markdown("### 📊 ATM ±2 Strikes - Detailed Bias Tabulation")
+    if strike_analyses:
+        display_atm_strikes_tabulation(strike_analyses, atm_bias.get("atm_strike", 0) if atm_bias else 0)
+    else:
+        st.warning("⚠️ No strike analysis data available")
+
+    st.markdown("---")
+
+    # Row 3: ATM Bias Summaries
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 🏛️ ATM ±2 Bias")
+        if atm_bias:
+            call_oi = atm_bias.get("total_ce_oi_atm", 0)
+            put_oi = atm_bias.get("total_pe_oi_atm", 0)
+            net_delta = atm_bias.get("net_delta_exposure_atm", 0)
+            net_gamma = atm_bias.get("net_gamma_exposure_atm", 0)
+
+            st.markdown(f"""
+            - **CALL OI**: {call_oi:,.0f}
+            - **PUT OI**: {put_oi:,.0f}
+            - **Net Δ**: {net_delta:,.0f}
+            - **Net γ**: {net_gamma:,.0f}
+            """)
+        else:
+            st.info("No ATM ±2 bias data")
+
+    with col2:
+        st.markdown("### 🎯 ATM ±3 Bias")
+        if atm_bias_plus3:
+            call_oi = atm_bias_plus3.get("total_ce_oi_atm", 0)
+            put_oi = atm_bias_plus3.get("total_pe_oi_atm", 0)
+            pcr = put_oi / max(call_oi, 1)
+            net_gamma = atm_bias_plus3.get("net_gamma_exposure_atm", 0)
+
+            st.markdown(f"""
+            - **CALL OI**: {call_oi:,.0f}
+            - **PUT OI**: {put_oi:,.0f}
+            - **PCR**: {pcr:.2f}
+            - **Net γ**: {net_gamma:,.0f}
+            """)
+        else:
+            st.info("No ATM ±3 bias data")
+
+    st.markdown("---")
+
+    # Row 4: Expiry & PCR Analysis
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("### 📅 Expiry Analysis")
+        if expiry_spike_data:
+            spike_prob = expiry_spike_data.get("expiry_spike_probability", "N/A")
+            key_levels = expiry_spike_data.get("key_resistance_levels", [])
+
+            st.markdown(f"**Spike Probability**: {spike_prob}")
+            if key_levels:
+                st.markdown(f"**Key Levels**: {', '.join(map(str, key_levels[:3]))}")
+        else:
+            st.info("No expiry spike data")
+
+    with col2:
+        st.markdown("### 📊 PCR Analysis")
+        if oi_pcr_metrics:
+            pcr = oi_pcr_metrics.get("PCR_OI", "N/A")
+            sentiment = oi_pcr_metrics.get("sentiment", "N/A")
+
+            st.markdown(f"**PCR (OI)**: {pcr}")
+            st.markdown(f"**Sentiment**: {sentiment}")
+        else:
+            st.info("No PCR data")
+
+    st.markdown("---")
+
+
+# ============================================
 # 🎯 OVERALL BIAS CALCULATOR (NEW)
 # ============================================
 def calculate_overall_bias(atm_bias, atm_bias_plus3, support_bias, resistance_bias, seller_bias_result):
@@ -3942,13 +4390,34 @@ def render_nifty_option_screener():
     # Display ATM Bias Dashboard
     if atm_bias or atm_bias_plus3 or support_bias or resistance_bias:
         display_bias_dashboard(atm_bias, support_bias, resistance_bias, atm_bias_plus3)
-    
+
+    # ============================================
+    # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
+    # ============================================
+
+    # Create ATM ±2 strikes tabulation
+    strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+
+    # Calculate expiry spike data early for the summary
+    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+    # Display the reorganized Overall Market Sentiment Summary Dashboard
+    display_overall_market_sentiment_summary(
+        overall_bias=overall_bias,
+        atm_bias=atm_bias,
+        atm_bias_plus3=atm_bias_plus3,
+        seller_max_pain=seller_max_pain,
+        total_gex_net=total_gex_net,
+        expiry_spike_data=expiry_spike_data,
+        oi_pcr_metrics=oi_pcr_metrics,
+        strike_analyses=strike_analyses
+    )
+
     # ============================================
     # 📅 EXPIRY SPIKE DETECTION
     # ============================================
-    
-    # Calculate expiry spike data
-    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+    # Expiry spike data already calculated above for the summary dashboard
     
     # Advanced spike detection (optional)
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
