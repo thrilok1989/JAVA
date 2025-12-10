@@ -857,10 +857,12 @@ async def run_all_analyses(NSE_INSTRUMENTS, show_progress=True):
 
 def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     """
-    Renders the Overall Market Sentiment tab with comprehensive analysis
+    Renders the Overall Market Sentiment tab - SIMPLIFIED DASHBOARD VIEW
+    Shows only essential summary metrics at a glance
     Auto-refreshes every 60 seconds
     """
-    st.markdown("## 🌟 Overall Market Sentiment")
+    st.markdown("## 🌟 Overall Market Sentiment Dashboard")
+    st.caption("Quick summary view - For detailed analysis, see dedicated tabs below")
 
     # Show refresh interval based on market session
     market_session = scheduler.get_market_session()
@@ -1138,19 +1140,90 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     st.markdown("---")
 
     # ═══════════════════════════════════════════════════════════════════
-    # DETAILED ANALYSIS BY SOURCE - WITH TABLES
+    # SIMPLIFIED INTERPRETATION & ACTION PLAN
     # ═══════════════════════════════════════════════════════════════════
 
-    st.markdown("### 📈 Detailed Analysis by Source")
+    st.markdown("### 💡 What Should I Do?")
 
-    sources = result['sources']
+    sentiment = result['overall_sentiment']
+    confidence = result['confidence']
+    score = result['overall_score']
 
-    # ─────────────────────────────────────────────────────────────────
-    # 1. STOCK PERFORMANCE TABLE
-    # ─────────────────────────────────────────────────────────────────
-    if 'Stock Performance' in sources:
-        source_data = sources['Stock Performance']
-        with st.expander("**📊 Stock Performance (Market Breadth)**", expanded=True):
+    # Generate simple interpretation
+    if sentiment == 'BULLISH':
+        if confidence > 70:
+            st.success("✅ **Strong Bullish Signal**: Consider bullish strategies (long positions, call options, bull spreads)")
+        else:
+            st.info("📈 **Moderate Bullish**: Bullish bias with caution. Consider smaller position sizes.")
+    elif sentiment == 'BEARISH':
+        if confidence > 70:
+            st.error("⚠️ **Strong Bearish Signal**: Consider bearish strategies (short positions, put options, bear spreads)")
+        else:
+            st.warning("📉 **Moderate Bearish**: Bearish bias with caution. Monitor key resistance levels.")
+    else:
+        st.info("⚖️ **Neutral/Range-bound**: Stay on the sidelines or use neutral strategies (iron condors, straddles)")
+
+    # Risk Warning
+    st.caption("""
+    ⚠️ **Risk Warning**: This sentiment analysis is based on technical indicators and historical data.
+    Past performance does not guarantee future results. Always use proper risk management.
+    """)
+
+    st.markdown("---")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # QUICK LINKS TO DETAILED TABS
+    # ═══════════════════════════════════════════════════════════════════
+
+    st.markdown("### 🔗 Detailed Analysis Available In:")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.info("""
+        **🎯 NIFTY Option Screener v7.0** (Tab 8)
+        - ATM Bias Analyzer
+        - OI/PCR Analytics
+        - Seller's Perspective
+        - Moment Detector
+        - Expiry Spike Analysis
+        """)
+
+    with col2:
+        st.info("""
+        **🎲 Bias Analysis Pro** (Tab 5)
+        - 13 Technical Indicators
+        - Stock Performance Details
+        - Weighted Scoring
+        - Historical Analysis
+        """)
+
+    with col3:
+        st.info("""
+        **🌐 Enhanced Market Data** (Tab 9)
+        - India VIX
+        - Sector Rotation
+        - Global Markets
+        - Intermarket Data
+        """)
+
+    st.markdown("---")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # DETAILED ANALYSIS BY SOURCE (COLLAPSED BY DEFAULT)
+    # ═══════════════════════════════════════════════════════════════════
+
+    with st.expander("📊 **Show Detailed Source Analysis** (Click to expand)", expanded=False):
+        st.markdown("### 📈 Detailed Analysis by Source")
+
+        sources = result['sources']
+
+        # ─────────────────────────────────────────────────────────────────
+        # 1. STOCK PERFORMANCE TABLE
+        # ─────────────────────────────────────────────────────────────────
+        if 'Stock Performance' in sources:
+            source_data = sources['Stock Performance']
+            st.markdown("#### 📊 Stock Performance (Market Breadth)")
             bias = source_data.get('bias', 'NEUTRAL')
             score = source_data.get('score', 0)
             confidence = source_data.get('confidence', 0)
@@ -1637,52 +1710,6 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                     """)
             else:
                 st.info("ℹ️ Comprehensive option chain metrics will be displayed here. Visit individual instrument tabs in the Option Chain Analysis section to generate these metrics.")
-
-    st.markdown("---")
-
-    # ═══════════════════════════════════════════════════════════════════
-    # INTERPRETATION & RECOMMENDATIONS
-    # ═══════════════════════════════════════════════════════════════════
-
-    st.markdown("### 💡 Interpretation & Recommendations")
-
-    sentiment = result['overall_sentiment']
-    confidence = result['confidence']
-    score = result['overall_score']
-
-    # Generate interpretation
-    if sentiment == 'BULLISH':
-        if confidence > 70:
-            interpretation = "🚀 **Strong Bullish Signal**: Multiple analysis sources align towards a bullish market sentiment. High confidence suggests this is a reliable signal."
-            recommendation = "✅ **Recommendation**: Consider bullish strategies. Look for long positions, call options, or bull spreads. Focus on support levels for entry points."
-        else:
-            interpretation = "📈 **Moderate Bullish Signal**: Overall sentiment is bullish, but confidence is moderate. Some indicators may be conflicting."
-            recommendation = "⚠️ **Recommendation**: Bullish bias with caution. Consider smaller position sizes or wait for higher confirmation. Monitor key support levels."
-
-    elif sentiment == 'BEARISH':
-        if confidence > 70:
-            interpretation = "📉 **Strong Bearish Signal**: Multiple analysis sources align towards a bearish market sentiment. High confidence suggests this is a reliable signal."
-            recommendation = "✅ **Recommendation**: Consider bearish strategies. Look for short positions, put options, or bear spreads. Focus on resistance levels for entry points."
-        else:
-            interpretation = "🔻 **Moderate Bearish Signal**: Overall sentiment is bearish, but confidence is moderate. Some indicators may be conflicting."
-            recommendation = "⚠️ **Recommendation**: Bearish bias with caution. Consider smaller position sizes or wait for higher confirmation. Monitor key resistance levels."
-
-    else:
-        interpretation = "⚖️ **Neutral/Consolidation**: Market indicators show no clear directional bias. This could indicate a ranging market or conflicting signals."
-        recommendation = "🔄 **Recommendation**: Stay on the sidelines or use neutral strategies. Consider iron condors, straddles, or range-bound trading."
-
-    st.info(interpretation)
-    st.success(recommendation)
-
-    # Risk Warning
-    st.warning("""
-    **⚠️ Risk Warning**:
-    - This sentiment analysis is based on technical indicators and historical data
-    - Past performance does not guarantee future results
-    - Always use proper risk management and position sizing
-    - Combine this analysis with your own research and market understanding
-    - Consider fundamental factors, news events, and market conditions
-    """)
 
     # Last Updated and Next Refresh
     st.markdown("---")

@@ -3656,12 +3656,31 @@ def render_nifty_option_screener():
     # ============================================
     # 📊 COMPREHENSIVE OI & PCR DASHBOARD
     # ============================================
-    
+
     # Run OI/PCR analysis
     oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
-    
+
     st.markdown("---")
-    st.markdown("## 📊 ENHANCED OI & PCR ANALYTICS DASHBOARD")
+
+    # ═══════════════════════════════════════════════════════════════════
+    # CREATE SUB-TABS FOR ORGANIZED CONTENT
+    # ═══════════════════════════════════════════════════════════════════
+
+    screener_tabs = st.tabs([
+        "📊 OI/PCR Analytics",
+        "🎯 ATM Bias Analyzer",
+        "🎪 Seller's Perspective",
+        "🚀 Moment Detector",
+        "📅 Expiry Analysis",
+        "📱 Telegram Signals"
+    ])
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 1: OI/PCR ANALYTICS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[0]:
+        st.markdown("## 📊 ENHANCED OI & PCR ANALYTICS DASHBOARD")
     
     # Row 1: Totals
     col_t1, col_t2, col_t3, col_t4 = st.columns(4)
@@ -3843,37 +3862,44 @@ def render_nifty_option_screener():
     </div>
     """, unsafe_allow_html=True)
 
-    # Display ATM Bias Dashboard
-    if atm_bias or support_bias or resistance_bias:
-        display_bias_dashboard(atm_bias, support_bias, resistance_bias)
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 2: ATM BIAS ANALYZER
+    # ═══════════════════════════════════════════════════════════════════
 
-    # ============================================
-    # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
-    # ============================================
+    with screener_tabs[1]:
+        st.markdown("## 🎯 ATM BIAS ANALYZER")
 
-    # Create ATM ±2 strikes tabulation
-    strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+        # Display ATM Bias Dashboard
+        if atm_bias or support_bias or resistance_bias:
+            display_bias_dashboard(atm_bias, support_bias, resistance_bias)
 
-    # Calculate expiry spike data early for the summary
-    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+        # ============================================
+        # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
+        # ============================================
 
-    # Display the reorganized Overall Market Sentiment Summary Dashboard
-    display_overall_market_sentiment_summary(
-        overall_bias=overall_bias,
-        atm_bias=atm_bias,
-        seller_max_pain=seller_max_pain,
-        total_gex_net=total_gex_net,
-        expiry_spike_data=expiry_spike_data,
-        oi_pcr_metrics=oi_pcr_metrics,
-        strike_analyses=strike_analyses
-    )
+        # Create ATM ±2 strikes tabulation
+        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+
+        # Calculate expiry spike data early for the summary
+        expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+        # Display the reorganized Overall Market Sentiment Summary Dashboard
+        display_overall_market_sentiment_summary(
+            overall_bias=overall_bias,
+            atm_bias=atm_bias,
+            seller_max_pain=seller_max_pain,
+            total_gex_net=total_gex_net,
+            expiry_spike_data=expiry_spike_data,
+            oi_pcr_metrics=oi_pcr_metrics,
+            strike_analyses=strike_analyses
+        )
 
     # ============================================
     # 📅 EXPIRY SPIKE DETECTION
     # ============================================
 
     # Expiry spike data already calculated above for the summary dashboard
-    
+
     # Advanced spike detection (optional)
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
     gamma_spike_risk = calculate_gamma_exposure_spike(total_gex_net, days_to_expiry)
@@ -3882,25 +3908,25 @@ def render_nifty_option_screener():
         nearest_sup["strike"] if nearest_sup else None,
         nearest_res["strike"] if nearest_res else None
     )
-    
+
     # Check for new Telegram signal
     telegram_signal = check_and_send_signal(
-        entry_signal, spot, seller_bias_result, 
-        seller_max_pain, nearest_sup, nearest_res, 
+        entry_signal, spot, seller_bias_result,
+        seller_max_pain, nearest_sup, nearest_res,
         moment_metrics, seller_breakout_index, expiry, expiry_spike_data,
         atm_bias, support_bias, resistance_bias
     )
-    
-    # ============================================
-    # 📅 EXPIRY DATE SPIKE DETECTOR UI
-    # ============================================
-    
-    st.markdown("---")
-    st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
-    
-    # Main spike card
-    if expiry_spike_data["active"]:
-        spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 4: EXPIRY ANALYSIS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[4]:
+        st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
+
+        # Main spike card
+        if expiry_spike_data["active"]:
+            spike_col1, spike_col2, spike_col3 = st.columns([2, 1, 1])
         
         with spike_col1:
             st.markdown(f"""
@@ -4087,15 +4113,16 @@ def render_nifty_option_screener():
         *Check back closer to expiry for spike alerts*
         """)
     
-    # ============================================
-    # 🚀 TELEGRAM SIGNAL SECTION
-    # ============================================
-    st.markdown("---")
-    st.markdown("## 📱 TELEGRAM SIGNAL GENERATION (Option 3 Format)")
-    
-    if telegram_signal:
-        # NEW SIGNAL DETECTED
-        st.success("🎯 **NEW TRADE SIGNAL GENERATED!**")
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 5: TELEGRAM SIGNALS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[5]:
+        st.markdown("## 📱 TELEGRAM SIGNAL GENERATION (Option 3 Format)")
+
+        if telegram_signal:
+            # NEW SIGNAL DETECTED
+            st.success("🎯 **NEW TRADE SIGNAL GENERATED!**")
         
         # Auto-send to Telegram if enabled
         if auto_send and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
@@ -4217,18 +4244,18 @@ def render_nifty_option_screener():
         if "last_signal" in st.session_state and st.session_state["last_signal"]:
             st.info(f"📝 Last signal was: {st.session_state['last_signal']}")
     
-    # ============================================
-    # 🚀 MOMENT DETECTOR DISPLAY
-    # ============================================
-    
-    st.markdown("---")
-    st.markdown("## 🚀 MOMENT DETECTOR (Is this a real move?)")
-    
-    moment_col1, moment_col2, moment_col3, moment_col4 = st.columns(4)
-    
-    with moment_col1:
-        mb = moment_metrics["momentum_burst"]
-        if mb["available"]:
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 3: MOMENT DETECTOR
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[3]:
+        st.markdown("## 🚀 MOMENT DETECTOR (Is this a real move?)")
+
+        moment_col1, moment_col2, moment_col3, moment_col4 = st.columns(4)
+
+        with moment_col1:
+            mb = moment_metrics["momentum_burst"]
+            if mb["available"]:
             color = "#ff00ff" if mb["score"] > 70 else ("#ff9900" if mb["score"] > 40 else "#66b3ff")
             st.markdown(f'''
             <div class="moment-box">
