@@ -1924,7 +1924,7 @@ def generate_telegram_signal_option3(entry_signal, spot, seller_bias_result, sel
     resistance_str = f"₹{nearest_res['strike']:,}" if nearest_res else "N/A"
     
     # Format max pain
-    max_pain_str = f"₹{seller_max_pain:,}" if seller_max_pain else "N/A"
+    max_pain_str = f"₹{seller_max_pain.get('max_pain_strike', 0):,}" if seller_max_pain else "N/A"
     
     # Calculate entry distance from current spot
     entry_distance = abs(spot - optimal_entry_price)
@@ -2062,15 +2062,16 @@ def detect_expiry_spikes(merged_df, spot, atm_strike, days_to_expiry, expiry_dat
     # Factor 2: Max Pain vs Spot Distance (0-20 points)
     max_pain = calculate_seller_max_pain(merged_df)
     if max_pain:
-        max_pain_distance = abs(spot - max_pain) / spot * 100
+        max_pain_strike = max_pain.get("max_pain_strike", 0)
+        max_pain_distance = abs(spot - max_pain_strike) / spot * 100
         if max_pain_distance > 2.0:
             spike_score += 20
             spike_factors.append(f"Spot far from Max Pain ({max_pain_distance:.1f}%)")
-            if spot > max_pain:
+            if spot > max_pain_strike:
                 spike_type = "SHORT SQUEEZE"
             else:
                 spike_type = "LONG SQUEEZE"
-            key_levels.append(f"Max Pain: ₹{max_pain:,}")
+            key_levels.append(f"Max Pain: ₹{max_pain_strike:,}")
         elif max_pain_distance > 1.0:
             spike_score += 10
             spike_factors.append(f"Spot moderately far from Max Pain ({max_pain_distance:.1f}%)")
@@ -3084,20 +3085,21 @@ def calculate_entry_signal_extended(
     # 2. MAX PAIN ALIGNMENT (15% weight)
     # ============================================
     if seller_max_pain:
-        distance_to_max_pain = abs(spot - seller_max_pain)
+        max_pain_strike = seller_max_pain.get("max_pain_strike", 0)
+        distance_to_max_pain = abs(spot - max_pain_strike)
         distance_pct = (distance_to_max_pain / spot) * 100
-        
+
         if distance_pct < 0.5:
             signal_score += 15
-            signal_reasons.append(f"Spot VERY close to Max Pain (₹{seller_max_pain:,}, {distance_pct:.2f}%)")
-            optimal_entry_price = seller_max_pain
+            signal_reasons.append(f"Spot VERY close to Max Pain (₹{max_pain_strike:,}, {distance_pct:.2f}%)")
+            optimal_entry_price = max_pain_strike
         elif distance_pct < 1.0:
             signal_score += 10
-            signal_reasons.append(f"Spot close to Max Pain (₹{seller_max_pain:,}, {distance_pct:.2f}%)")
-            if position_type == "LONG" and spot < seller_max_pain:
-                optimal_entry_price = min(spot + (seller_max_pain - spot) * 0.5, seller_max_pain)
-            elif position_type == "SHORT" and spot > seller_max_pain:
-                optimal_entry_price = max(spot - (spot - seller_max_pain) * 0.5, seller_max_pain)
+            signal_reasons.append(f"Spot close to Max Pain (₹{max_pain_strike:,}, {distance_pct:.2f}%)")
+            if position_type == "LONG" and spot < max_pain_strike:
+                optimal_entry_price = min(spot + (max_pain_strike - spot) * 0.5, max_pain_strike)
+            elif position_type == "SHORT" and spot > max_pain_strike:
+                optimal_entry_price = max(spot - (spot - max_pain_strike) * 0.5, max_pain_strike)
     
     # ============================================
     # 3. SUPPORT/RESISTANCE ALIGNMENT (20% weight)
@@ -3460,15 +3462,20 @@ def calculate_seller_max_pain(df):
         pe_oi = safe_int(row.get("OI_PE", 0))
         ce_ltp = safe_float(row.get("LTP_CE", 0))
         pe_ltp = safe_float(row.get("LTP_PE", 0))
-        
+
         ce_pain = ce_oi * max(0, ce_ltp) if strike < df["strikePrice"].mean() else 0
         pe_pain = pe_oi * max(0, pe_ltp) if strike > df["strikePrice"].mean() else 0
-        
+
         pain = ce_pain + pe_pain
         pain_dict[strike] = pain
-    
+
     if pain_dict:
-        return min(pain_dict, key=pain_dict.get)
+        max_pain_strike = min(pain_dict, key=pain_dict.get)
+        total_cost = pain_dict[max_pain_strike]
+        return {
+            "max_pain_strike": max_pain_strike,
+            "total_cost": total_cost
+        }
     return None
 
 def calculate_seller_market_bias(merged_df, spot, atm_strike):
@@ -3529,7 +3536,8 @@ def calculate_seller_market_bias(merged_df, spot, atm_strike):
     
     max_pain = calculate_seller_max_pain(merged_df)
     if max_pain:
-        distance_to_spot = abs(spot - max_pain) / spot * 100
+        max_pain_strike = max_pain.get("max_pain_strike", 0)
+        distance_to_spot = abs(spot - max_pain_strike) / spot * 100
         if distance_to_spot < 1.0:
             polarity += 0.5
     
@@ -4423,7 +4431,7 @@ def render_nifty_option_screener():
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
     gamma_spike_risk = calculate_gamma_exposure_spike(total_gex_net, days_to_expiry)
     pinning_probability = predict_expiry_pinning_probability(
-        spot, seller_max_pain, 
+        spot, seller_max_pain.get("max_pain_strike", 0) if seller_max_pain else None,
         nearest_sup["strike"] if nearest_sup else None,
         nearest_res["strike"] if nearest_res else None
     )
@@ -5291,11 +5299,12 @@ def render_nifty_option_screener():
     
     # Max Pain Display
     if seller_max_pain:
-        distance_to_max_pain = abs(spot - seller_max_pain)
+        max_pain_strike = seller_max_pain.get("max_pain_strike", 0)
+        distance_to_max_pain = abs(spot - max_pain_strike)
         st.markdown(f"""
         <div class='max-pain-box'>
             <h4>🎯 SELLER'S MAX PAIN (Preferred Level)</h4>
-            <p style='font-size: 1.5rem; color: #ff9900; font-weight: bold; text-align: center;'>₹{seller_max_pain:,}</p>
+            <p style='font-size: 1.5rem; color: #ff9900; font-weight: bold; text-align: center;'>₹{max_pain_strike:,}</p>
             <p style='text-align: center; color: #cccccc;'>Distance from spot: ₹{distance_to_max_pain:.2f} ({distance_to_max_pain/spot*100:.2f}%)</p>
             <p style='text-align: center; color: #ffcc00;'>Sellers want price here to minimize losses</p>
         </div>
@@ -5946,12 +5955,13 @@ def render_nifty_option_screener():
         
         # Max Pain insight
         if seller_max_pain:
+            max_pain_strike = seller_max_pain.get("max_pain_strike", 0)
             max_pain_insight = ""
-            if spot > seller_max_pain:
-                max_pain_insight = f"Spot ABOVE max pain (₹{seller_max_pain:,}). Sellers losing on CALLs, gaining on PUTs."
+            if spot > max_pain_strike:
+                max_pain_insight = f"Spot ABOVE max pain (₹{max_pain_strike:,}). Sellers losing on CALLs, gaining on PUTs."
             else:
-                max_pain_insight = f"Spot BELOW max pain (₹{seller_max_pain:,}). Sellers gaining on CALLs, losing on PUTs."
-            
+                max_pain_insight = f"Spot BELOW max pain (₹{max_pain_strike:,}). Sellers gaining on CALLs, losing on PUTs."
+
             st.info(f"**Max Pain:** {max_pain_insight}")
         
         # GEX insight
@@ -6111,7 +6121,7 @@ def render_nifty_option_screener():
         <p><strong>Expiry Context:</strong> {expiry_summary if expiry_summary else f"Expiry in {days_to_expiry:.1f} days"}</p>
         <p><strong>Key defense levels:</strong> ₹{nearest_sup['strike'] if nearest_sup else 'N/A':,} (Support) | ₹{nearest_res['strike'] if nearest_res else 'N/A':,} (Resistance)</p>
         <p><strong>Max OI Walls:</strong> CALL: ₹{oi_pcr_metrics['max_ce_strike']:,} | PUT: ₹{oi_pcr_metrics['max_pe_strike']:,}</p>
-        <p><strong>Preferred price level:</strong> ₹{seller_max_pain if seller_max_pain else 'N/A':,} (Max Pain)</p>
+        <p><strong>Preferred price level:</strong> ₹{seller_max_pain.get('max_pain_strike', 0) if seller_max_pain else 'N/A':,} (Max Pain)</p>
     </div>
     ''', unsafe_allow_html=True)
     
