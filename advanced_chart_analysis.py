@@ -20,6 +20,7 @@ from indicators.htf_volume_footprint import HTFVolumeFootprint
 from indicators.ultimate_rsi import UltimateRSI
 from indicators.om_indicator import OMIndicator
 from indicators.liquidity_sentiment_profile import LiquiditySentimentProfile
+from indicators.advanced_price_action import AdvancedPriceAction
 from dhan_data_fetcher import DhanDataFetcher
 from config import get_dhan_credentials
 
@@ -151,8 +152,11 @@ class AdvancedChartAnalysis:
     def create_advanced_chart(self, df, symbol, show_vob=True, show_htf_sr=True,
                              show_footprint=True, show_rsi=True, show_om=False,
                              show_volume=True, show_liquidity_profile=False,
+                             show_bos=False, show_choch=False, show_fibonacci=False,
+                             show_patterns=False,
                              vob_params=None, htf_params=None, footprint_params=None,
-                             rsi_params=None, om_params=None, liquidity_params=None):
+                             rsi_params=None, om_params=None, liquidity_params=None,
+                             price_action_params=None):
         """
         Create advanced chart with all indicators
 
@@ -224,11 +228,19 @@ class AdvancedChartAnalysis:
                 else:
                     lsp_indicator = LiquiditySentimentProfile()
 
+            price_action_indicator = None
+            if show_bos or show_choch or show_fibonacci or show_patterns:
+                if price_action_params:
+                    price_action_indicator = AdvancedPriceAction(**price_action_params)
+                else:
+                    price_action_indicator = AdvancedPriceAction()
+
             # Calculate all indicators
             vob_data = vob_indicator.calculate(df) if vob_indicator else None
             rsi_data = ultimate_rsi.get_signals(df) if ultimate_rsi else None
             om_data = om_indicator.calculate(df) if om_indicator else None
             lsp_data = lsp_indicator.calculate(df) if lsp_indicator else None
+            price_action_data = price_action_indicator.analyze(df) if price_action_indicator else None
         except Exception as e:
             raise Exception(f"Error calculating indicators: {str(e)}")
 
@@ -341,6 +353,20 @@ class AdvancedChartAnalysis:
         # Add Liquidity Sentiment Profile
         if show_liquidity_profile and lsp_data and lsp_data.get('success'):
             fig = lsp_indicator.add_to_chart(fig, df, lsp_data)
+
+        # Add Advanced Price Action Features
+        if price_action_data and price_action_data.get('success'):
+            if show_bos and price_action_data.get('bos_events'):
+                self._add_bos(fig, df, price_action_data['bos_events'], row=price_row, col=1)
+
+            if show_choch and price_action_data.get('choch_events'):
+                self._add_choch(fig, df, price_action_data['choch_events'], row=price_row, col=1)
+
+            if show_fibonacci and price_action_data.get('fibonacci', {}).get('success'):
+                self._add_fibonacci(fig, df, price_action_data['fibonacci'], row=price_row, col=1)
+
+            if show_patterns and price_action_data.get('patterns'):
+                self._add_patterns(fig, df, price_action_data['patterns'], row=price_row, col=1)
 
         # Update layout
         # Calculate height based on number of subplots
@@ -948,3 +974,400 @@ class AdvancedChartAnalysis:
                 ),
                 row=row, col=col
             )
+
+    # =========================================================================
+    # ADVANCED PRICE ACTION VISUALIZATION METHODS
+    # =========================================================================
+
+    def _add_bos(self, fig, df, bos_events, row, col):
+        """Add Break of Structure (BOS) markers to chart"""
+        for bos in bos_events:
+            if bos['type'] == 'BULLISH':
+                # Bullish BOS - Green arrow pointing up
+                fig.add_trace(
+                    go.Scatter(
+                        x=[bos['time']],
+                        y=[bos['price']],
+                        mode='markers+text',
+                        name='Bullish BOS',
+                        marker=dict(
+                            symbol='triangle-up',
+                            size=15,
+                            color='#00ff00',
+                            line=dict(color='white', width=2)
+                        ),
+                        text='BOS↑',
+                        textposition='bottom center',
+                        textfont=dict(color='#00ff00', size=12, family='Arial Black'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+                # Draw line from structure level to break
+                fig.add_trace(
+                    go.Scatter(
+                        x=[bos['structure_time'], bos['time']],
+                        y=[bos['structure_level'], bos['structure_level']],
+                        mode='lines',
+                        line=dict(color='#00ff00', width=1, dash='dot'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+            else:  # BEARISH BOS
+                # Bearish BOS - Red arrow pointing down
+                fig.add_trace(
+                    go.Scatter(
+                        x=[bos['time']],
+                        y=[bos['price']],
+                        mode='markers+text',
+                        name='Bearish BOS',
+                        marker=dict(
+                            symbol='triangle-down',
+                            size=15,
+                            color='#ff0000',
+                            line=dict(color='white', width=2)
+                        ),
+                        text='BOS↓',
+                        textposition='top center',
+                        textfont=dict(color='#ff0000', size=12, family='Arial Black'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+                # Draw line from structure level to break
+                fig.add_trace(
+                    go.Scatter(
+                        x=[bos['structure_time'], bos['time']],
+                        y=[bos['structure_level'], bos['structure_level']],
+                        mode='lines',
+                        line=dict(color='#ff0000', width=1, dash='dot'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+    def _add_choch(self, fig, df, choch_events, row, col):
+        """Add Change of Character (CHOCH) markers to chart"""
+        for choch in choch_events:
+            if choch['type'] == 'BULLISH':
+                # Bullish CHOCH - Cyan diamond
+                fig.add_trace(
+                    go.Scatter(
+                        x=[choch['time']],
+                        y=[choch['price']],
+                        mode='markers+text',
+                        name='Bullish CHOCH',
+                        marker=dict(
+                            symbol='diamond',
+                            size=12,
+                            color='#00ffff',
+                            line=dict(color='white', width=1)
+                        ),
+                        text='CHOCH',
+                        textposition='bottom center',
+                        textfont=dict(color='#00ffff', size=10),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+            else:  # BEARISH CHOCH
+                # Bearish CHOCH - Orange diamond
+                fig.add_trace(
+                    go.Scatter(
+                        x=[choch['time']],
+                        y=[choch['price']],
+                        mode='markers+text',
+                        name='Bearish CHOCH',
+                        marker=dict(
+                            symbol='diamond',
+                            size=12,
+                            color='#ff8800',
+                            line=dict(color='white', width=1)
+                        ),
+                        text='CHOCH',
+                        textposition='top center',
+                        textfont=dict(color='#ff8800', size=10),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+    def _add_fibonacci(self, fig, df, fib_data, row, col):
+        """Add Fibonacci retracement and extension levels to chart"""
+        x_start = fib_data['swing_low']['time']
+        x_end = df.index[-1]
+
+        # Add swing high and low markers
+        fig.add_trace(
+            go.Scatter(
+                x=[fib_data['swing_high']['time']],
+                y=[fib_data['swing_high']['price']],
+                mode='markers',
+                name='Swing High',
+                marker=dict(symbol='star', size=12, color='yellow'),
+                showlegend=False
+            ),
+            row=row, col=col
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=[fib_data['swing_low']['time']],
+                y=[fib_data['swing_low']['price']],
+                mode='markers',
+                name='Swing Low',
+                marker=dict(symbol='star', size=12, color='blue'),
+                showlegend=False
+            ),
+            row=row, col=col
+        )
+
+        # Fibonacci colors
+        fib_colors = {
+            '0.0': 'rgba(150, 150, 150, 0.3)',
+            '0.236': 'rgba(100, 181, 246, 0.3)',
+            '0.382': 'rgba(66, 165, 245, 0.3)',
+            '0.5': 'rgba(255, 235, 59, 0.4)',      # Yellow for 50%
+            '0.618': 'rgba(255, 167, 38, 0.4)',    # Golden ratio
+            '0.786': 'rgba(239, 83, 80, 0.3)',
+            '1.0': 'rgba(150, 150, 150, 0.3)',
+            '1.272': 'rgba(156, 39, 176, 0.3)',
+            '1.414': 'rgba(103, 58, 183, 0.3)',
+            '1.618': 'rgba(63, 81, 181, 0.4)',     # Golden extension
+            '2.0': 'rgba(33, 150, 243, 0.3)',
+            '2.618': 'rgba(3, 169, 244, 0.3)'
+        }
+
+        # Add retracement levels
+        for label, price in fib_data['retracement_levels'].items():
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_start, x_end],
+                    y=[price, price],
+                    mode='lines',
+                    name=f'Fib {label}',
+                    line=dict(
+                        color=fib_colors.get(label, 'rgba(150, 150, 150, 0.3)'),
+                        width=1,
+                        dash='dash' if label not in ['0.5', '0.618'] else 'solid'
+                    ),
+                    hovertemplate=f'Fib {label}: {price:.2f}<extra></extra>',
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Add label annotation
+            fig.add_annotation(
+                x=x_end,
+                y=price,
+                text=f'{label}',
+                showarrow=False,
+                xanchor='left',
+                font=dict(size=9, color='white'),
+                bgcolor=fib_colors.get(label, 'rgba(150, 150, 150, 0.5)'),
+                borderpad=2,
+                row=row, col=col
+            )
+
+        # Add extension levels (if calculated)
+        for label, price in fib_data.get('extension_levels', {}).items():
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_start, x_end],
+                    y=[price, price],
+                    mode='lines',
+                    name=f'Fib Ext {label}',
+                    line=dict(
+                        color=fib_colors.get(label, 'rgba(150, 150, 150, 0.3)'),
+                        width=1,
+                        dash='dot'
+                    ),
+                    hovertemplate=f'Fib Ext {label}: {price:.2f}<extra></extra>',
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+    def _add_patterns(self, fig, df, patterns, row, col):
+        """Add geometrical pattern overlays to chart"""
+        # Head and Shoulders
+        for pattern in patterns.get('head_and_shoulders', []):
+            # Draw shoulders and head
+            fig.add_trace(
+                go.Scatter(
+                    x=[pattern['left_shoulder']['time'], pattern['head']['time'], pattern['right_shoulder']['time']],
+                    y=[pattern['left_shoulder']['price'], pattern['head']['price'], pattern['right_shoulder']['price']],
+                    mode='lines+markers',
+                    name='H&S Pattern',
+                    line=dict(color='red', width=2),
+                    marker=dict(size=10, color='red'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Draw neckline
+            x_start = pattern['left_shoulder']['time']
+            x_end = df.index[-1]
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_start, x_end],
+                    y=[pattern['neckline_price'], pattern['neckline_price']],
+                    mode='lines',
+                    name='H&S Neckline',
+                    line=dict(color='yellow', width=2, dash='dash'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Add text annotation
+            fig.add_annotation(
+                x=pattern['head']['time'],
+                y=pattern['head']['price'],
+                text='H&S',
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor='red',
+                font=dict(color='white', size=12),
+                bgcolor='red',
+                row=row, col=col
+            )
+
+        # Inverse Head and Shoulders
+        for pattern in patterns.get('inverse_head_and_shoulders', []):
+            # Draw shoulders and head
+            fig.add_trace(
+                go.Scatter(
+                    x=[pattern['left_shoulder']['time'], pattern['head']['time'], pattern['right_shoulder']['time']],
+                    y=[pattern['left_shoulder']['price'], pattern['head']['price'], pattern['right_shoulder']['price']],
+                    mode='lines+markers',
+                    name='Inv H&S Pattern',
+                    line=dict(color='green', width=2),
+                    marker=dict(size=10, color='green'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Draw neckline
+            x_start = pattern['left_shoulder']['time']
+            x_end = df.index[-1]
+            fig.add_trace(
+                go.Scatter(
+                    x=[x_start, x_end],
+                    y=[pattern['neckline_price'], pattern['neckline_price']],
+                    mode='lines',
+                    name='Inv H&S Neckline',
+                    line=dict(color='lime', width=2, dash='dash'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Add text annotation
+            fig.add_annotation(
+                x=pattern['head']['time'],
+                y=pattern['head']['price'],
+                text='INV H&S',
+                showarrow=True,
+                arrowhead=2,
+                arrowcolor='green',
+                font=dict(color='white', size=12),
+                bgcolor='green',
+                row=row, col=col
+            )
+
+        # Triangles
+        for pattern in patterns.get('triangles', []):
+            upper_tl = pattern['upper_trendline']
+            lower_tl = pattern['lower_trendline']
+
+            # Draw upper trendline
+            fig.add_trace(
+                go.Scatter(
+                    x=[pt['time'] for pt in upper_tl],
+                    y=[pt['price'] for pt in upper_tl],
+                    mode='lines',
+                    name=f'{pattern["type"]} Upper',
+                    line=dict(color='orange', width=2, dash='dash'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Draw lower trendline
+            fig.add_trace(
+                go.Scatter(
+                    x=[pt['time'] for pt in lower_tl],
+                    y=[pt['price'] for pt in lower_tl],
+                    mode='lines',
+                    name=f'{pattern["type"]} Lower',
+                    line=dict(color='orange', width=2, dash='dash'),
+                    showlegend=False
+                ),
+                row=row, col=col
+            )
+
+            # Add pattern label
+            mid_x = upper_tl[len(upper_tl)//2]['time']
+            mid_y = (upper_tl[len(upper_tl)//2]['price'] + lower_tl[len(lower_tl)//2]['price']) / 2
+            fig.add_annotation(
+                x=mid_x,
+                y=mid_y,
+                text=pattern['type'].replace('_', ' '),
+                showarrow=False,
+                font=dict(color='white', size=10),
+                bgcolor='orange',
+                row=row, col=col
+            )
+
+        # Flags and Pennants
+        for pattern in patterns.get('flags_pennants', []):
+            consolidation_highs = pattern['consolidation_highs']
+            consolidation_lows = pattern['consolidation_lows']
+
+            if consolidation_highs and consolidation_lows:
+                # Draw consolidation box
+                fig.add_trace(
+                    go.Scatter(
+                        x=[pt['time'] for pt in consolidation_highs],
+                        y=[pt['price'] for pt in consolidation_highs],
+                        mode='lines',
+                        name=f'{pattern["type"]} Upper',
+                        line=dict(color='purple', width=2, dash='dash'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=[pt['time'] for pt in consolidation_lows],
+                        y=[pt['price'] for pt in consolidation_lows],
+                        mode='lines',
+                        name=f'{pattern["type"]} Lower',
+                        line=dict(color='purple', width=2, dash='dash'),
+                        showlegend=False
+                    ),
+                    row=row, col=col
+                )
+
+                # Add pattern label
+                mid_x = consolidation_highs[0]['time']
+                mid_y = (consolidation_highs[0]['price'] + consolidation_lows[0]['price']) / 2
+                fig.add_annotation(
+                    x=mid_x,
+                    y=mid_y,
+                    text=pattern['type'].replace('_', ' '),
+                    showarrow=True,
+                    arrowhead=2,
+                    font=dict(color='white', size=10),
+                    bgcolor='purple',
+                    row=row, col=col
+                )
