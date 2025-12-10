@@ -251,23 +251,23 @@ def analyze_atm_bias(merged_df, spot, atm_strike, strike_gap):
     total_delta_ce = atm_df["Delta_CE"].sum()
     total_delta_pe = atm_df["Delta_PE"].sum()
     net_delta = total_delta_ce + total_delta_pe  # CALL delta positive, PUT delta negative
-    
+
     if net_delta > 0.3:
-        bias_scores["Delta_Bias"] = -1  # Positive delta = CALL heavy = Bearish for sellers
-        bias_interpretations["Delta_Bias"] = "Positive delta → CALL heavy → Bearish"
-        bias_emojis["Delta_Bias"] = "🐻 Bearish"
+        bias_scores["Delta_Bias"] = 1  # Positive delta = CALL heavy = Bullish
+        bias_interpretations["Delta_Bias"] = "Positive delta → CALL heavy → Bullish"
+        bias_emojis["Delta_Bias"] = "🐂 Bullish"
     elif net_delta > 0.1:
-        bias_scores["Delta_Bias"] = -0.5
-        bias_interpretations["Delta_Bias"] = "Mild positive delta → Slightly bearish"
-        bias_emojis["Delta_Bias"] = "🐻 Bearish"
-    elif net_delta < -0.3:
-        bias_scores["Delta_Bias"] = 1  # Negative delta = PUT heavy = Bullish for sellers
-        bias_interpretations["Delta_Bias"] = "Negative delta → PUT heavy → Bullish"
-        bias_emojis["Delta_Bias"] = "🐂 Bullish"
-    elif net_delta < -0.1:
         bias_scores["Delta_Bias"] = 0.5
-        bias_interpretations["Delta_Bias"] = "Mild negative delta → Slightly bullish"
+        bias_interpretations["Delta_Bias"] = "Mild positive delta → Slightly bullish"
         bias_emojis["Delta_Bias"] = "🐂 Bullish"
+    elif net_delta < -0.3:
+        bias_scores["Delta_Bias"] = -1  # Negative delta = PUT heavy = Bearish
+        bias_interpretations["Delta_Bias"] = "Negative delta → PUT heavy → Bearish"
+        bias_emojis["Delta_Bias"] = "🐻 Bearish"
+    elif net_delta < -0.1:
+        bias_scores["Delta_Bias"] = -0.5
+        bias_interpretations["Delta_Bias"] = "Mild negative delta → Slightly bearish"
+        bias_emojis["Delta_Bias"] = "🐻 Bearish"
     else:
         bias_scores["Delta_Bias"] = 0
         bias_interpretations["Delta_Bias"] = "Neutral delta"
@@ -356,23 +356,23 @@ def analyze_atm_bias(merged_df, spot, atm_strike, strike_gap):
     delta_exposure_ce = (atm_df["Delta_CE"] * atm_df["OI_CE"]).sum()
     delta_exposure_pe = (atm_df["Delta_PE"] * atm_df["OI_PE"]).sum()
     net_delta_exposure = delta_exposure_ce + delta_exposure_pe
-    
+
     if net_delta_exposure > 1000000:
-        bias_scores["Delta_Exposure_Bias"] = -1
-        bias_interpretations["Delta_Exposure_Bias"] = "High CALL delta exposure → Bearish pressure"
-        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
-    elif net_delta_exposure > 500000:
-        bias_scores["Delta_Exposure_Bias"] = -0.5
-        bias_interpretations["Delta_Exposure_Bias"] = "Moderate CALL delta exposure → Slightly bearish"
-        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
-    elif net_delta_exposure < -1000000:
         bias_scores["Delta_Exposure_Bias"] = 1
-        bias_interpretations["Delta_Exposure_Bias"] = "High PUT delta exposure → Bullish pressure"
+        bias_interpretations["Delta_Exposure_Bias"] = "High CALL delta exposure → Bullish pressure"
         bias_emojis["Delta_Exposure_Bias"] = "🐂 Bullish"
-    elif net_delta_exposure < -500000:
+    elif net_delta_exposure > 500000:
         bias_scores["Delta_Exposure_Bias"] = 0.5
-        bias_interpretations["Delta_Exposure_Bias"] = "Moderate PUT delta exposure → Slightly bullish"
+        bias_interpretations["Delta_Exposure_Bias"] = "Moderate CALL delta exposure → Slightly bullish"
         bias_emojis["Delta_Exposure_Bias"] = "🐂 Bullish"
+    elif net_delta_exposure < -1000000:
+        bias_scores["Delta_Exposure_Bias"] = -1
+        bias_interpretations["Delta_Exposure_Bias"] = "High PUT delta exposure → Bearish pressure"
+        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
+    elif net_delta_exposure < -500000:
+        bias_scores["Delta_Exposure_Bias"] = -0.5
+        bias_interpretations["Delta_Exposure_Bias"] = "Moderate PUT delta exposure → Slightly bearish"
+        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
     else:
         bias_scores["Delta_Exposure_Bias"] = 0
         bias_interpretations["Delta_Exposure_Bias"] = "Balanced delta exposure"
@@ -637,21 +637,21 @@ def analyze_atm_bias_plus3(merged_df, spot, atm_strike, strike_gap):
     net_delta = total_delta_ce + total_delta_pe  # CALL delta positive, PUT delta negative
 
     if net_delta > 0.3:
-        bias_scores["Delta_Bias"] = -1  # Positive delta = CALL heavy = Bearish for sellers
-        bias_interpretations["Delta_Bias"] = "Positive delta → CALL heavy → Bearish"
-        bias_emojis["Delta_Bias"] = "🐻 Bearish"
+        bias_scores["Delta_Bias"] = 1  # Positive delta = CALL heavy = Bullish
+        bias_interpretations["Delta_Bias"] = "Positive delta → CALL heavy → Bullish"
+        bias_emojis["Delta_Bias"] = "🐂 Bullish"
     elif net_delta > 0.1:
-        bias_scores["Delta_Bias"] = -0.5
-        bias_interpretations["Delta_Bias"] = "Mild positive delta → Slightly bearish"
-        bias_emojis["Delta_Bias"] = "🐻 Bearish"
-    elif net_delta < -0.3:
-        bias_scores["Delta_Bias"] = 1  # Negative delta = PUT heavy = Bullish for sellers
-        bias_interpretations["Delta_Bias"] = "Negative delta → PUT heavy → Bullish"
-        bias_emojis["Delta_Bias"] = "🐂 Bullish"
-    elif net_delta < -0.1:
         bias_scores["Delta_Bias"] = 0.5
-        bias_interpretations["Delta_Bias"] = "Mild negative delta → Slightly bullish"
+        bias_interpretations["Delta_Bias"] = "Mild positive delta → Slightly bullish"
         bias_emojis["Delta_Bias"] = "🐂 Bullish"
+    elif net_delta < -0.3:
+        bias_scores["Delta_Bias"] = -1  # Negative delta = PUT heavy = Bearish
+        bias_interpretations["Delta_Bias"] = "Negative delta → PUT heavy → Bearish"
+        bias_emojis["Delta_Bias"] = "🐻 Bearish"
+    elif net_delta < -0.1:
+        bias_scores["Delta_Bias"] = -0.5
+        bias_interpretations["Delta_Bias"] = "Mild negative delta → Slightly bearish"
+        bias_emojis["Delta_Bias"] = "🐻 Bearish"
     else:
         bias_scores["Delta_Bias"] = 0
         bias_interpretations["Delta_Bias"] = "Neutral delta"
@@ -742,21 +742,21 @@ def analyze_atm_bias_plus3(merged_df, spot, atm_strike, strike_gap):
     net_delta_exposure = delta_exposure_ce + delta_exposure_pe
 
     if net_delta_exposure > 1000000:
-        bias_scores["Delta_Exposure_Bias"] = -1
-        bias_interpretations["Delta_Exposure_Bias"] = "High CALL delta exposure → Bearish pressure"
-        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
-    elif net_delta_exposure > 500000:
-        bias_scores["Delta_Exposure_Bias"] = -0.5
-        bias_interpretations["Delta_Exposure_Bias"] = "Moderate CALL delta exposure → Slightly bearish"
-        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
-    elif net_delta_exposure < -1000000:
         bias_scores["Delta_Exposure_Bias"] = 1
-        bias_interpretations["Delta_Exposure_Bias"] = "High PUT delta exposure → Bullish pressure"
+        bias_interpretations["Delta_Exposure_Bias"] = "High CALL delta exposure → Bullish pressure"
         bias_emojis["Delta_Exposure_Bias"] = "🐂 Bullish"
-    elif net_delta_exposure < -500000:
+    elif net_delta_exposure > 500000:
         bias_scores["Delta_Exposure_Bias"] = 0.5
-        bias_interpretations["Delta_Exposure_Bias"] = "Moderate PUT delta exposure → Slightly bullish"
+        bias_interpretations["Delta_Exposure_Bias"] = "Moderate CALL delta exposure → Slightly bullish"
         bias_emojis["Delta_Exposure_Bias"] = "🐂 Bullish"
+    elif net_delta_exposure < -1000000:
+        bias_scores["Delta_Exposure_Bias"] = -1
+        bias_interpretations["Delta_Exposure_Bias"] = "High PUT delta exposure → Bearish pressure"
+        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
+    elif net_delta_exposure < -500000:
+        bias_scores["Delta_Exposure_Bias"] = -0.5
+        bias_interpretations["Delta_Exposure_Bias"] = "Moderate PUT delta exposure → Slightly bearish"
+        bias_emojis["Delta_Exposure_Bias"] = "🐻 Bearish"
     else:
         bias_scores["Delta_Exposure_Bias"] = 0
         bias_interpretations["Delta_Exposure_Bias"] = "Balanced delta exposure"
@@ -1397,11 +1397,11 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     net_delta_exp = ce_delta_exp + pe_delta_exp
 
     if net_delta_exp > 0:
-        bias_scores["DeltaExp"] = -1
-        bias_emojis["DeltaExp"] = "🐻"
-    elif net_delta_exp < 0:
         bias_scores["DeltaExp"] = 1
         bias_emojis["DeltaExp"] = "🐂"
+    elif net_delta_exp < 0:
+        bias_scores["DeltaExp"] = -1
+        bias_emojis["DeltaExp"] = "🐻"
     else:
         bias_scores["DeltaExp"] = 0
         bias_emojis["DeltaExp"] = "⚖️"
