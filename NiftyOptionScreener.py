@@ -992,6 +992,19 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
         bias_emojis["OIChgRate"] = "⚖️"
     bias_interpretations["OIChgRate"] = f"Chg Rate: {chg_rate:.2f}%"
 
+    # 12. PCR AT STRIKE (Put-Call Ratio)
+    pcr_strike = pe_oi / max(ce_oi, 1)
+    if pcr_strike > 1.5:
+        bias_scores["PCR"] = 1
+        bias_emojis["PCR"] = "🐂"
+    elif pcr_strike < 0.67:
+        bias_scores["PCR"] = -1
+        bias_emojis["PCR"] = "🐻"
+    else:
+        bias_scores["PCR"] = 0
+        bias_emojis["PCR"] = "⚖️"
+    bias_interpretations["PCR"] = f"Strike PCR: {pcr_strike:.2f}"
+
     # Calculate overall verdict for this strike
     total_bias = sum(bias_scores.values())
     if total_bias >= 3:
@@ -1023,7 +1036,7 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
 
 def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
     """
-    Create tabulation for ATM ±2 strikes with 11 bias metrics each
+    Create tabulation for ATM ±2 strikes with 12 bias metrics each
     Returns: list of strike analyses
     """
     strike_analyses = []
@@ -1045,17 +1058,17 @@ def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
 
 def display_atm_strikes_tabulation(strike_analyses, atm_strike):
     """
-    Display the ATM ±2 strikes tabulation with 11 bias metrics
+    Display the ATM ±2 strikes tabulation with 12 bias metrics
     Highlights ATM strike prominently
     """
     if not strike_analyses:
         st.warning("⚠️ No strike data available for tabulation")
         return
 
-    st.markdown("### 📊 ATM ±2 Strikes - 11 Bias Metrics Tabulation")
+    st.markdown("### 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation")
 
     # Create header row
-    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "Verdict"]
+    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "Verdict"]
 
     # Build HTML table
     html = '<div style="overflow-x: auto;"><table style="width:100%; border-collapse: collapse; font-size: 12px;">'
@@ -1082,8 +1095,8 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         # Strike price
         html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center; font-weight: bold;">{strike}</td>'
 
-        # 11 bias metrics
-        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate"]:
+        # 12 bias metrics
+        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate", "PCR"]:
             emoji = analysis["bias_emojis"].get(metric, "⚖️")
             score = analysis["bias_scores"].get(metric, 0)
             html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center;">{emoji}<br/><small>{score:+.1f}</small></td>'
@@ -1113,7 +1126,7 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
                 st.markdown(f"**{metric}**: {emoji} {score:+.1f} - {interpretation}")
 
 
-def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses):
+def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses, sector_rotation_data=None):
     """
     Display a consolidated dashboard of the most important market sentiment indicators
     Organized in a clean tabulation format
@@ -1183,7 +1196,265 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
 
     st.markdown("---")
 
-    # Row 3: ATM Bias Summaries
+    # Row 3: PCR Bias Analysis
+    st.markdown("### 📊 PUT-CALL RATIO (PCR) BIAS")
+    if oi_pcr_metrics:
+        pcr_col1, pcr_col2, pcr_col3 = st.columns(3)
+
+        with pcr_col1:
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 3px solid {oi_pcr_metrics['pcr_color']};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>PCR VALUE</div>
+                <div style='font-size: 3rem; color:{oi_pcr_metrics['pcr_color']}; font-weight:900;'>
+                    {oi_pcr_metrics['pcr_total']:.2f}
+                </div>
+                <div style='font-size: 1.2rem; color:{oi_pcr_metrics['pcr_color']}; margin-top: 10px;'>
+                    {oi_pcr_metrics['pcr_interpretation']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with pcr_col2:
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 2px solid {oi_pcr_metrics['pcr_color']};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>SENTIMENT</div>
+                <div style='font-size: 2rem; color:{oi_pcr_metrics['pcr_color']}; font-weight:700;'>
+                    {oi_pcr_metrics['pcr_sentiment']}
+                </div>
+                <div style='font-size: 0.9rem; color:#aaaaaa; margin-top: 10px;'>
+                    {oi_pcr_metrics['chg_interpretation']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with pcr_col3:
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 2px solid #666;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>CALL OI</div>
+                <div style='font-size: 1.5rem; color:#ff6b6b; font-weight:700;'>
+                    {oi_pcr_metrics['total_ce_oi']:,.0f}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>PUT OI</div>
+                <div style='font-size: 1.5rem; color:#51cf66; font-weight:700;'>
+                    {oi_pcr_metrics['total_pe_oi']:,.0f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No PCR data available")
+
+    st.markdown("---")
+
+    # Row 4: ATM Overall Bias Summary
+    st.markdown("### 🎯 ATM OVERALL BIAS")
+    if atm_bias:
+        atm_col1, atm_col2, atm_col3 = st.columns(3)
+
+        with atm_col1:
+            verdict = atm_bias.get("verdict", "N/A")
+            total_score = atm_bias.get("total_score", 0)
+
+            if "BULLISH" in verdict.upper():
+                atm_color = "#00FF00"
+            elif "BEARISH" in verdict.upper():
+                atm_color = "#FF0000"
+            else:
+                atm_color = "#FFD700"
+
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a2e1a 0%, #2a3e2a 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 3px solid {atm_color};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>ATM VERDICT</div>
+                <div style='font-size: 2.5rem; color:{atm_color}; font-weight:900;'>
+                    {verdict}
+                </div>
+                <div style='font-size: 1.2rem; color:#ffffff; margin-top: 10px;'>
+                    Score: {total_score:+.2f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with atm_col2:
+            call_oi = atm_bias.get("total_ce_oi_atm", 0)
+            put_oi = atm_bias.get("total_pe_oi_atm", 0)
+
+            st.markdown(f"""
+            <div style="
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 10px;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>CALL OI (ATM ±2)</div>
+                <div style='font-size: 1.8rem; color:#ff6b6b; font-weight:700;'>
+                    {call_oi:,.0f}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>PUT OI (ATM ±2)</div>
+                <div style='font-size: 1.8rem; color:#51cf66; font-weight:700;'>
+                    {put_oi:,.0f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with atm_col3:
+            net_delta = atm_bias.get("net_delta_exposure_atm", 0)
+            net_gamma = atm_bias.get("net_gamma_exposure_atm", 0)
+
+            delta_color = "#00ff88" if net_delta > 0 else "#ff4444" if net_delta < 0 else "#66b3ff"
+            gamma_color = "#00ff88" if net_gamma > 0 else "#ff4444" if net_gamma < 0 else "#66b3ff"
+
+            st.markdown(f"""
+            <div style="
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 10px;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>Net Delta Exposure</div>
+                <div style='font-size: 1.8rem; color:{delta_color}; font-weight:700;'>
+                    {net_delta:,.0f}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>Net Gamma Exposure</div>
+                <div style='font-size: 1.8rem; color:{gamma_color}; font-weight:700;'>
+                    {net_gamma:,.0f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No ATM bias data available")
+
+    st.markdown("---")
+
+    # Row 5: Sector Rotation Analysis Bias
+    if sector_rotation_data and sector_rotation_data.get('success'):
+        st.markdown("### 🔄 SECTOR ROTATION ANALYSIS BIAS")
+
+        rot_col1, rot_col2, rot_col3 = st.columns(3)
+
+        with rot_col1:
+            rotation_bias = sector_rotation_data.get('rotation_bias', 'NEUTRAL')
+            rotation_score = sector_rotation_data.get('rotation_score', 0)
+
+            if rotation_bias == "BULLISH":
+                rot_color = "#00ff88"
+            elif rotation_bias == "BEARISH":
+                rot_color = "#ff4444"
+            else:
+                rot_color = "#66b3ff"
+
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 3px solid {rot_color};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>ROTATION BIAS</div>
+                <div style='font-size: 2.5rem; color:{rot_color}; font-weight:900;'>
+                    {rotation_bias}
+                </div>
+                <div style='font-size: 1.2rem; color:#ffffff; margin-top: 10px;'>
+                    Score: {rotation_score:+.0f}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with rot_col2:
+            rotation_type = sector_rotation_data.get('rotation_type', 'N/A')
+            rotation_pattern = sector_rotation_data.get('rotation_pattern', 'N/A')
+
+            st.markdown(f"""
+            <div style="
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 10px;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>Rotation Type</div>
+                <div style='font-size: 1.3rem; color:#ffffff; font-weight:700; margin: 10px 0;'>
+                    {rotation_type}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc;'>Pattern</div>
+                <div style='font-size: 1rem; color:#ffcc00; font-weight:600; margin-top: 5px;'>
+                    {rotation_pattern}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with rot_col3:
+            sector_sentiment = sector_rotation_data.get('sector_sentiment', 'NEUTRAL')
+            sector_breadth = sector_rotation_data.get('sector_breadth', 0)
+
+            if "BULLISH" in sector_sentiment:
+                sent_color = "#00ff88"
+            elif "BEARISH" in sector_sentiment:
+                sent_color = "#ff4444"
+            else:
+                sent_color = "#66b3ff"
+
+            st.markdown(f"""
+            <div style="
+                background: rgba(0,0,0,0.3);
+                padding: 15px;
+                border-radius: 10px;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Sentiment</div>
+                <div style='font-size: 1.5rem; color:{sent_color}; font-weight:700; margin: 10px 0;'>
+                    {sector_sentiment}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc;'>Sector Breadth</div>
+                <div style='font-size: 1.3rem; color:#ffcc00; font-weight:700; margin-top: 5px;'>
+                    {sector_breadth:.1f}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Show leading and lagging sectors
+        leaders = sector_rotation_data.get('leaders', [])
+        laggards = sector_rotation_data.get('laggards', [])
+
+        if leaders or laggards:
+            st.markdown("#### 📈 Sector Leaders & Laggards")
+            lead_col, lag_col = st.columns(2)
+
+            with lead_col:
+                st.markdown("**🚀 Leading Sectors:**")
+                for sector in leaders:
+                    st.markdown(f"- {sector['sector']}: {sector['change_pct']:+.2f}%")
+
+            with lag_col:
+                st.markdown("**📉 Lagging Sectors:**")
+                for sector in laggards:
+                    st.markdown(f"- {sector['sector']}: {sector['change_pct']:+.2f}%")
+
+    st.markdown("---")
+
+    # Row 6: ATM Bias Summaries (Legacy)
     col1, col2 = st.columns(2)
 
     with col1:
@@ -3883,6 +4154,13 @@ def render_nifty_option_screener():
         # Calculate expiry spike data early for the summary
         expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
 
+        # Get sector rotation data from enhanced market data if available
+        sector_rotation_data = None
+        if 'enhanced_market_data' in st.session_state:
+            enhanced_data = st.session_state.enhanced_market_data
+            if 'sector_rotation' in enhanced_data:
+                sector_rotation_data = enhanced_data['sector_rotation']
+
         # Display the reorganized Overall Market Sentiment Summary Dashboard
         display_overall_market_sentiment_summary(
             overall_bias=overall_bias,
@@ -3891,7 +4169,8 @@ def render_nifty_option_screener():
             total_gex_net=total_gex_net,
             expiry_spike_data=expiry_spike_data,
             oi_pcr_metrics=oi_pcr_metrics,
-            strike_analyses=strike_analyses
+            strike_analyses=strike_analyses,
+            sector_rotation_data=sector_rotation_data
         )
 
     # ============================================
@@ -4098,20 +4377,20 @@ def render_nifty_option_screener():
                 </p>
             </div>
             """, unsafe_allow_html=True)
-    
-    else:
-        st.info(f"""
-        ### 📅 Expiry Spike Detector (Inactive)
-        
-        **Reason:** {expiry_spike_data['message']}
-        
-        Spike detection activates when expiry is ≤5 days away.
-        
-        Current expiry: **{expiry}**  
-        Days to expiry: **{days_to_expiry:.1f}**
-        
-        *Check back closer to expiry for spike alerts*
-        """)
+
+        else:
+            st.info(f"""
+            ### 📅 Expiry Spike Detector (Inactive)
+
+            **Reason:** {expiry_spike_data['message']}
+
+            Spike detection activates when expiry is ≤5 days away.
+
+            Current expiry: **{expiry}**
+            Days to expiry: **{days_to_expiry:.1f}**
+
+            *Check back closer to expiry for spike alerts*
+            """)
     
     # ═══════════════════════════════════════════════════════════════════
     # SUB-TAB 5: TELEGRAM SIGNALS
@@ -4216,33 +4495,33 @@ def render_nifty_option_screener():
         # Last signal info
         if "last_signal" in st.session_state and st.session_state["last_signal"]:
             st.caption(f"📝 Last signal type: {st.session_state['last_signal']}")
-        
-    else:
-        # No active signal
-        st.info("📭 **No active trade signal to send.**")
-        
-        # Show why no signal
-        with st.expander("ℹ️ Why no signal?", expanded=False):
-            st.markdown(f"""
-            **Current Status:**
-            - Position Type: {entry_signal['position_type']}
-            - Signal Strength: {entry_signal['signal_strength']}
-            - Confidence: {entry_signal['confidence']:.0f}%
-            - Seller Bias: {seller_bias_result['bias']}
-            - ATM Bias: {atm_bias['verdict'] if atm_bias else 'N/A'}
-            - Expiry Spike Risk: {expiry_spike_data.get('probability', 0)}%
-            - PCR Sentiment: {oi_pcr_metrics['pcr_sentiment']}
-            
-            **Requirements for signal generation:**
-            ✅ Position Type ≠ NEUTRAL
-            ✅ Confidence ≥ 40%
-            ✅ Clear directional bias
-            ✅ ATM bias alignment
-            """)
-        
-        # Show last signal if exists
-        if "last_signal" in st.session_state and st.session_state["last_signal"]:
-            st.info(f"📝 Last signal was: {st.session_state['last_signal']}")
+
+        else:
+            # No active signal
+            st.info("📭 **No active trade signal to send.**")
+
+            # Show why no signal
+            with st.expander("ℹ️ Why no signal?", expanded=False):
+                st.markdown(f"""
+                **Current Status:**
+                - Position Type: {entry_signal['position_type']}
+                - Signal Strength: {entry_signal['signal_strength']}
+                - Confidence: {entry_signal['confidence']:.0f}%
+                - Seller Bias: {seller_bias_result['bias']}
+                - ATM Bias: {atm_bias['verdict'] if atm_bias else 'N/A'}
+                - Expiry Spike Risk: {expiry_spike_data.get('probability', 0)}%
+                - PCR Sentiment: {oi_pcr_metrics['pcr_sentiment']}
+
+                **Requirements for signal generation:**
+                ✅ Position Type ≠ NEUTRAL
+                ✅ Confidence ≥ 40%
+                ✅ Clear directional bias
+                ✅ ATM bias alignment
+                """)
+
+            # Show last signal if exists
+            if "last_signal" in st.session_state and st.session_state["last_signal"]:
+                st.info(f"📝 Last signal was: {st.session_state['last_signal']}")
     
     # ═══════════════════════════════════════════════════════════════════
     # SUB-TAB 3: MOMENT DETECTOR
