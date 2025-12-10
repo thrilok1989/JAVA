@@ -1100,6 +1100,61 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     # BIAS METRICS SUMMARY - NEW SECTION
     # ═══════════════════════════════════════════════════════════════════
 
+    # ─────────────────────────────────────────────────────────────────
+    # AUTO-LOAD REQUIRED DATA FOR BIAS METRICS
+    # ─────────────────────────────────────────────────────────────────
+
+    # Auto-load Enhanced Market Data if not present (for Sector Rotation)
+    if 'enhanced_market_data' not in st.session_state:
+        try:
+            with st.spinner("🔄 Auto-loading Enhanced Market Data for complete analysis..."):
+                from enhanced_market_data import get_enhanced_market_data
+                enhanced_data = get_enhanced_market_data()
+                st.session_state.enhanced_market_data = enhanced_data
+        except Exception as e:
+            # Silently handle error - will show info message later
+            pass
+
+    # Check if option chain data needs to be loaded
+    option_data_missing = (
+        'overall_option_data' not in st.session_state or
+        not st.session_state.overall_option_data
+    )
+
+    atm_data_missing = all(
+        f'{instrument}_atm_zone_bias' not in st.session_state
+        for instrument in ['NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY']
+    )
+
+    # If option chain data is missing and we have NSE_INSTRUMENTS, offer to load it
+    if (option_data_missing or atm_data_missing) and NSE_INSTRUMENTS is not None:
+        if not is_within_trading_hours():
+            # Market is closed - show manual load button
+            if st.button("📊 Load Option Chain Data (PCR & ATM Metrics)",
+                        type="primary",
+                        key="load_option_chain_bias_metrics",
+                        help="Load option chain data for PCR and ATM bias analysis"):
+                with st.spinner("📊 Loading option chain data for all instruments..."):
+                    try:
+                        success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True)
+                        if success_oc:
+                            st.success("✅ Option chain data loaded successfully!")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Failed to load option chain data: {', '.join(errors_oc)}")
+                    except Exception as e:
+                        st.error(f"❌ Error loading option chain data: {str(e)}")
+        else:
+            # Market is open - auto-load silently
+            if option_data_missing or atm_data_missing:
+                try:
+                    with st.spinner("🔄 Auto-loading option chain data..."):
+                        _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=False)
+                        st.rerun()
+                except Exception as e:
+                    # Silently handle error - will show info message later
+                    pass
+
     st.markdown("## 📊 BIAS METRICS SUMMARY")
     st.caption("Comprehensive bias analysis from PCR, ATM Strikes, and Sector Rotation")
 
@@ -1165,9 +1220,9 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("ℹ️ PCR data not available. Run option chain analysis first.")
+            st.info("ℹ️ PCR data not available. Click the **'📊 Load Option Chain Data'** button above to load PCR analysis.")
     else:
-        st.info("ℹ️ PCR data not available. Run option chain analysis first.")
+        st.info("ℹ️ PCR data not available. Click the **'📊 Load Option Chain Data'** button above to load PCR analysis.")
 
     st.markdown("---")
 
@@ -1240,7 +1295,7 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 st.markdown("---")
 
     if not atm_data_found:
-        st.info("ℹ️ ATM zone bias data not available. Run option chain analysis for individual instruments first.")
+        st.info("ℹ️ ATM zone bias data not available. Click the **'📊 Load Option Chain Data'** button above to load ATM bias analysis.")
 
     # ─────────────────────────────────────────────────────────────────
     # 3. ATM OVERALL BIAS
@@ -1305,7 +1360,7 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         </div>
         """, unsafe_allow_html=True)
     else:
-        st.info("ℹ️ ATM overall bias data not available. Run option chain analysis first.")
+        st.info("ℹ️ ATM overall bias data not available. Click the **'📊 Load Option Chain Data'** button above to load ATM bias analysis.")
 
     st.markdown("---")
 
@@ -1415,7 +1470,7 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             else:
                 st.info("No laggard data available")
     else:
-        st.info("ℹ️ Sector rotation data not available. Visit Enhanced Market Data tab to load sector rotation analysis.")
+        st.info("ℹ️ Sector rotation data not available. Enhanced Market Data should auto-load above. If not, visit the **Enhanced Market Data** tab to manually refresh.")
 
     st.markdown("---")
 
