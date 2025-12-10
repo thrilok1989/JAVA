@@ -1097,6 +1097,329 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     st.markdown("---")
 
     # ═══════════════════════════════════════════════════════════════════
+    # BIAS METRICS SUMMARY - NEW SECTION
+    # ═══════════════════════════════════════════════════════════════════
+
+    st.markdown("## 📊 BIAS METRICS SUMMARY")
+    st.caption("Comprehensive bias analysis from PCR, ATM Strikes, and Sector Rotation")
+
+    # ─────────────────────────────────────────────────────────────────
+    # 1. PUT-CALL RATIO (PCR) BIAS
+    # ─────────────────────────────────────────────────────────────────
+
+    st.markdown("### 📊 PUT-CALL RATIO (PCR) BIAS")
+
+    # Get PCR data from session state
+    pcr_data = calculate_option_chain_pcr_sentiment(None)
+
+    if pcr_data:
+        pcr_details = pcr_data.get('pcr_details', [])
+
+        if pcr_details:
+            # Display PCR summary for main indices
+            for pcr_row in pcr_details:
+                instrument = pcr_row.get('Instrument', 'N/A')
+                pcr_oi = float(pcr_row.get('PCR (OI)', '0').replace(',', ''))
+                oi_bias = pcr_row.get('OI Bias', 'N/A')
+                pcr_chg_oi = float(pcr_row.get('PCR (Δ OI)', '0').replace(',', ''))
+                chg_bias = pcr_row.get('Δ OI Bias', 'N/A')
+
+                # Extract bias and determine color
+                if 'BULLISH' in str(oi_bias):
+                    bias_color = '#00ff88'
+                    bias_icon = '🐂'
+                elif 'BEARISH' in str(oi_bias):
+                    bias_color = '#ff4444'
+                    bias_icon = '🐻'
+                else:
+                    bias_color = '#ffa500'
+                    bias_icon = '⚖️'
+
+                # Display compact card for each instrument
+                st.markdown(f"""
+                <div style='background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+                            padding: 20px; border-radius: 15px; margin-bottom: 15px;
+                            border-left: 5px solid {bias_color};'>
+                    <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px;'>
+                        <div>
+                            <div style='font-size: 14px; color: #888; margin-bottom: 5px;'>Instrument</div>
+                            <div style='font-size: 20px; font-weight: bold; color: white;'>{instrument}</div>
+                        </div>
+                        <div>
+                            <div style='font-size: 14px; color: #888; margin-bottom: 5px;'>PCR (OI)</div>
+                            <div style='font-size: 24px; font-weight: bold; color: {bias_color};'>{pcr_oi:.2f}</div>
+                            <div style='font-size: 12px; color: {bias_color};'>{oi_bias}</div>
+                        </div>
+                        <div>
+                            <div style='font-size: 14px; color: #888; margin-bottom: 5px;'>PCR (Δ OI)</div>
+                            <div style='font-size: 24px; font-weight: bold; color: {bias_color};'>{pcr_chg_oi:.2f}</div>
+                            <div style='font-size: 12px; color: {bias_color};'>{chg_bias}</div>
+                        </div>
+                        <div>
+                            <div style='font-size: 14px; color: #888; margin-bottom: 5px;'>Sentiment</div>
+                            <div style='font-size: 20px; color: {bias_color};'>{bias_icon}</div>
+                            <div style='font-size: 14px; color: #888;'>CALL OI: {pcr_row.get("Total CE OI", "N/A")}</div>
+                            <div style='font-size: 14px; color: #888;'>PUT OI: {pcr_row.get("Total PE OI", "N/A")}</div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+        else:
+            st.info("ℹ️ PCR data not available. Run option chain analysis first.")
+    else:
+        st.info("ℹ️ PCR data not available. Run option chain analysis first.")
+
+    st.markdown("---")
+
+    # ─────────────────────────────────────────────────────────────────
+    # 2. ATM ±2 STRIKES - 12 BIAS METRICS TABULATION
+    # ─────────────────────────────────────────────────────────────────
+
+    st.markdown("### 🎯 ATM ±2 STRIKES - 12 BIAS METRICS TABULATION")
+    st.caption("Detailed bias analysis for ATM ±2 strikes with 12 metrics per strike")
+
+    # Get ATM zone bias data from session state
+    instruments = ['NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY']
+    atm_data_found = False
+
+    for instrument in instruments:
+        atm_key = f'{instrument}_atm_zone_bias'
+        if atm_key in st.session_state:
+            df_atm = st.session_state[atm_key]
+
+            # Filter for ATM ±2 strikes only
+            atm_window = df_atm[df_atm['Zone'].isin(['ATM', 'ITM+1', 'ITM+2', 'OTM-1', 'OTM-2'])]
+
+            if not atm_window.empty:
+                atm_data_found = True
+
+                st.markdown(f"#### {instrument} - ATM ±2 Strikes")
+
+                # Select the 12 bias metrics
+                bias_metrics_cols = [
+                    'Strike', 'Zone', 'OI_Bias', 'ChgOI_Bias', 'Volume_Bias',
+                    'Delta_Bias', 'Gamma_Bias', 'Premium_Bias', 'IV_Bias',
+                    'Delta_Exposure_Bias', 'Gamma_Exposure_Bias', 'IV_Skew_Bias',
+                    'BiasScore', 'Verdict'
+                ]
+
+                # Filter to only include available columns
+                available_cols = [col for col in bias_metrics_cols if col in atm_window.columns]
+
+                df_display = atm_window[available_cols].copy()
+
+                # Add emoji indicators for bias columns
+                for col in available_cols:
+                    if '_Bias' in col or col == 'Verdict':
+                        df_display[col] = df_display[col].apply(lambda x:
+                            f"🐂 {x}" if 'BULLISH' in str(x).upper() else
+                            f"🐻 {x}" if 'BEARISH' in str(x).upper() else
+                            f"⚖️ {x}" if 'NEUTRAL' in str(x).upper() else
+                            str(x)
+                        )
+
+                # Display the table
+                st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+                # Get ATM strike verdict
+                atm_row = atm_window[atm_window['Zone'] == 'ATM']
+                if not atm_row.empty:
+                    atm_verdict = atm_row.iloc[0].get('Verdict', 'N/A')
+                    atm_score = atm_row.iloc[0].get('BiasScore', 0)
+
+                    verdict_color = '#00ff88' if 'BULLISH' in str(atm_verdict).upper() else '#ff4444' if 'BEARISH' in str(atm_verdict).upper() else '#ffa500'
+
+                    st.markdown(f"""
+                    <div style='background: {verdict_color}; padding: 15px; border-radius: 10px; margin-top: 10px;'>
+                        <div style='color: white; font-size: 18px; font-weight: bold;'>
+                            {instrument} ATM Overall Verdict: {atm_verdict} (Score: {atm_score:.1f})
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                st.markdown("---")
+
+    if not atm_data_found:
+        st.info("ℹ️ ATM zone bias data not available. Run option chain analysis for individual instruments first.")
+
+    # ─────────────────────────────────────────────────────────────────
+    # 3. ATM OVERALL BIAS
+    # ─────────────────────────────────────────────────────────────────
+
+    st.markdown("### 🎯 ATM OVERALL BIAS")
+    st.caption("Aggregated ATM bias across all instruments with key metrics")
+
+    # Calculate overall ATM bias from all instruments
+    atm_overall_data = calculate_option_chain_atm_sentiment(None)
+
+    if atm_overall_data and atm_overall_data.get('total_instruments', 0) > 0:
+        atm_bias = atm_overall_data.get('bias', 'NEUTRAL')
+        atm_score = atm_overall_data.get('score', 0)
+        atm_confidence = atm_overall_data.get('confidence', 0)
+
+        # Determine color based on bias
+        atm_color = '#00ff88' if atm_bias == 'BULLISH' else '#ff4444' if atm_bias == 'BEARISH' else '#ffa500'
+        atm_icon = '🐂' if atm_bias == 'BULLISH' else '🐻' if atm_bias == 'BEARISH' else '⚖️'
+
+        # Get ATM details
+        atm_details = atm_overall_data.get('atm_details', [])
+
+        # Calculate aggregate metrics
+        total_call_oi_atm = sum([detail.get('Strike', 0) for detail in atm_details if isinstance(detail.get('Strike'), (int, float))])  # Placeholder
+        total_put_oi_atm = 0  # Placeholder
+
+        # Display ATM overall bias card
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+                    padding: 25px; border-radius: 15px; margin-bottom: 20px;
+                    border: 3px solid {atm_color};'>
+            <div style='display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;'>
+                <div style='text-align: center;'>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>ATM VERDICT</div>
+                    <div style='font-size: 48px; margin-bottom: 10px;'>{atm_icon}</div>
+                    <div style='font-size: 28px; font-weight: bold; color: {atm_color};'>{atm_bias}</div>
+                </div>
+                <div style='text-align: center;'>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>SCORE</div>
+                    <div style='font-size: 36px; font-weight: bold; color: {atm_color};'>{atm_score:+.1f}</div>
+                    <div style='font-size: 12px; color: #888;'>Confidence: {atm_confidence:.1f}%</div>
+                </div>
+                <div style='text-align: center;'>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>INSTRUMENTS</div>
+                    <div style='font-size: 20px; color: white;'>
+                        🟢 {atm_overall_data.get('bullish_instruments', 0)} |
+                        🔴 {atm_overall_data.get('bearish_instruments', 0)} |
+                        🟡 {atm_overall_data.get('neutral_instruments', 0)}
+                    </div>
+                    <div style='font-size: 12px; color: #888;'>Total: {atm_overall_data.get('total_instruments', 0)}</div>
+                </div>
+                <div style='text-align: center;'>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>KEY LEVELS</div>
+                    <div style='font-size: 14px; color: white;'>
+                        Delta Exposure: N/A<br/>
+                        Gamma Exposure: N/A<br/>
+                        IV Skew: N/A
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.info("ℹ️ ATM overall bias data not available. Run option chain analysis first.")
+
+    st.markdown("---")
+
+    # ─────────────────────────────────────────────────────────────────
+    # 4. SECTOR ROTATION ANALYSIS BIAS
+    # ─────────────────────────────────────────────────────────────────
+
+    st.markdown("### 🔄 SECTOR ROTATION ANALYSIS BIAS")
+    st.caption("Market sector rotation patterns and leadership analysis")
+
+    # Get sector rotation data from session state if available
+    sector_rotation_data = None
+
+    if 'enhanced_market_data' in st.session_state:
+        enhanced_data = st.session_state['enhanced_market_data']
+        if 'sector_rotation' in enhanced_data:
+            sector_rotation_data = enhanced_data['sector_rotation']
+
+    if sector_rotation_data and sector_rotation_data.get('success'):
+        rotation_bias = sector_rotation_data.get('rotation_bias', 'NEUTRAL')
+        rotation_score = sector_rotation_data.get('rotation_score', 0)
+        rotation_type = sector_rotation_data.get('rotation_type', 'N/A')
+        rotation_pattern = sector_rotation_data.get('rotation_pattern', 'N/A')
+        sector_sentiment = sector_rotation_data.get('sector_sentiment', 'NEUTRAL')
+        sector_breadth = sector_rotation_data.get('sector_breadth', 0)
+
+        # Determine color
+        rotation_color = '#00ff88' if rotation_bias == 'BULLISH' else '#ff4444' if rotation_bias == 'BEARISH' else '#ffa500'
+        rotation_icon = '🐂' if rotation_bias == 'BULLISH' else '🐻' if rotation_bias == 'BEARISH' else '⚖️'
+
+        # Get leaders and laggards
+        leaders = sector_rotation_data.get('leaders', [])
+        laggards = sector_rotation_data.get('laggards', [])
+
+        # Display sector rotation card
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+                    padding: 25px; border-radius: 15px; margin-bottom: 20px;
+                    border-left: 5px solid {rotation_color};'>
+            <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;'>
+                <div style='text-align: center;'>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>ROTATION BIAS</div>
+                    <div style='font-size: 48px; margin-bottom: 10px;'>{rotation_icon}</div>
+                    <div style='font-size: 24px; font-weight: bold; color: {rotation_color};'>{rotation_bias}</div>
+                    <div style='font-size: 12px; color: #888; margin-top: 5px;'>Score: {rotation_score:+.1f}</div>
+                </div>
+                <div>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>ROTATION DETAILS</div>
+                    <div style='font-size: 16px; color: white; margin-bottom: 8px;'>
+                        <strong>Type:</strong> {rotation_type}
+                    </div>
+                    <div style='font-size: 16px; color: white; margin-bottom: 8px;'>
+                        <strong>Pattern:</strong> {rotation_pattern}
+                    </div>
+                    <div style='font-size: 16px; color: white;'>
+                        <strong>Sentiment:</strong> {sector_sentiment}
+                    </div>
+                </div>
+                <div>
+                    <div style='font-size: 14px; color: #888; margin-bottom: 10px;'>SECTOR BREADTH</div>
+                    <div style='font-size: 36px; font-weight: bold; color: {rotation_color};'>{sector_breadth:.1f}%</div>
+                    <div style='font-size: 12px; color: #888; margin-top: 5px;'>
+                        Bullish: {sector_rotation_data.get('bullish_sectors_count', 0)} |
+                        Bearish: {sector_rotation_data.get('bearish_sectors_count', 0)}
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Display leaders and laggards
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("#### 📈 Leading Sectors")
+            if leaders:
+                for sector in leaders[:3]:
+                    sector_name = sector.get('sector', 'N/A')
+                    sector_change = sector.get('change_pct', 0)
+                    sector_color = '#00ff88' if sector_change > 0 else '#ff4444'
+
+                    st.markdown(f"""
+                    <div style='background: #2d2d2d; padding: 10px; border-radius: 8px; margin-bottom: 8px;
+                                border-left: 3px solid {sector_color};'>
+                        <div style='color: white; font-size: 16px;'>{sector_name}</div>
+                        <div style='color: {sector_color}; font-size: 20px; font-weight: bold;'>{sector_change:+.2f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No leader data available")
+
+        with col2:
+            st.markdown("#### 📉 Lagging Sectors")
+            if laggards:
+                for sector in laggards[:3]:
+                    sector_name = sector.get('sector', 'N/A')
+                    sector_change = sector.get('change_pct', 0)
+                    sector_color = '#00ff88' if sector_change > 0 else '#ff4444'
+
+                    st.markdown(f"""
+                    <div style='background: #2d2d2d; padding: 10px; border-radius: 8px; margin-bottom: 8px;
+                                border-left: 3px solid {sector_color};'>
+                        <div style='color: white; font-size: 16px;'>{sector_name}</div>
+                        <div style='color: {sector_color}; font-size: 20px; font-weight: bold;'>{sector_change:+.2f}%</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+            else:
+                st.info("No laggard data available")
+    else:
+        st.info("ℹ️ Sector rotation data not available. Visit Enhanced Market Data tab to load sector rotation analysis.")
+
+    st.markdown("---")
+
+    # ═══════════════════════════════════════════════════════════════════
     # SOURCE AGREEMENT VISUALIZATION
     # ═══════════════════════════════════════════════════════════════════
 
