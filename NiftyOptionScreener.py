@@ -4256,83 +4256,83 @@ def render_nifty_option_screener():
         with moment_col1:
             mb = moment_metrics["momentum_burst"]
             if mb["available"]:
-            color = "#ff00ff" if mb["score"] > 70 else ("#ff9900" if mb["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>💥 MOMENTUM BURST</h4>
-                <div class="moment-value" style="color:{color}">{mb["score"]}/100</div>
-                <div class="sub-info">{mb["note"]}</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>💥 MOMENTUM BURST</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Need more refresh points</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col2:
-        ob = moment_metrics["orderbook"]
-        if ob["available"]:
-            pressure = ob["pressure"]
-            color = "#00ff88" if pressure > 0.15 else ("#ff4444" if pressure < -0.15 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>📊 ORDERBOOK PRESSURE</h4>
-                <div class="moment-value" style="color:{color}">{pressure:+.2f}</div>
-                <div class="sub-info">Buy/Sell imbalance</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>📊 ORDERBOOK PRESSURE</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Depth data unavailable</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col3:
-        gc = moment_metrics["gamma_cluster"]
-        if gc["available"]:
-            color = "#ff00ff" if gc["score"] > 70 else ("#ff9900" if gc["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>🌀 GAMMA CLUSTER</h4>
-                <div class="moment-value" style="color:{color}">{gc["score"]}/100</div>
-                <div class="sub-info">ATM ±2 concentration</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>🌀 GAMMA CLUSTER</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Data unavailable</div>
-            </div>
-            ''', unsafe_allow_html=True)
-    
-    with moment_col4:
-        oi = moment_metrics["oi_accel"]
-        if oi["available"]:
-            color = "#ff00ff" if oi["score"] > 70 else ("#ff9900" if oi["score"] > 40 else "#66b3ff")
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>⚡ OI ACCELERATION</h4>
-                <div class="moment-value" style="color:{color}">{oi["score"]}/100</div>
-                <div class="sub-info">{oi["note"]}</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="moment-box">
-                <h4>⚡ OI ACCELERATION</h4>
-                <div class="moment-value" style="color:#cccccc">N/A</div>
-                <div class="sub-info">Need more refresh points</div>
-            </div>
-            ''', unsafe_allow_html=True)
+                color = "#ff00ff" if mb["score"] > 70 else ("#ff9900" if mb["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>💥 MOMENTUM BURST</h4>
+                    <div class="moment-value" style="color:{color}">{mb["score"]}/100</div>
+                    <div class="sub-info">{mb["note"]}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>💥 MOMENTUM BURST</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Need more refresh points</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col2:
+            ob = moment_metrics["orderbook"]
+            if ob["available"]:
+                pressure = ob["pressure"]
+                color = "#00ff88" if pressure > 0.15 else ("#ff4444" if pressure < -0.15 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>📊 ORDERBOOK PRESSURE</h4>
+                    <div class="moment-value" style="color:{color}">{pressure:+.2f}</div>
+                    <div class="sub-info">Buy/Sell imbalance</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>📊 ORDERBOOK PRESSURE</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Depth data unavailable</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col3:
+            gc = moment_metrics["gamma_cluster"]
+            if gc["available"]:
+                color = "#ff00ff" if gc["score"] > 70 else ("#ff9900" if gc["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>🌀 GAMMA CLUSTER</h4>
+                    <div class="moment-value" style="color:{color}">{gc["score"]}/100</div>
+                    <div class="sub-info">ATM ±2 concentration</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>🌀 GAMMA CLUSTER</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Data unavailable</div>
+                </div>
+                ''', unsafe_allow_html=True)
+
+        with moment_col4:
+            oi = moment_metrics["oi_accel"]
+            if oi["available"]:
+                color = "#ff00ff" if oi["score"] > 70 else ("#ff9900" if oi["score"] > 40 else "#66b3ff")
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>⚡ OI ACCELERATION</h4>
+                    <div class="moment-value" style="color:{color}">{oi["score"]}/100</div>
+                    <div class="sub-info">{oi["note"]}</div>
+                </div>
+                ''', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div class="moment-box">
+                    <h4>⚡ OI ACCELERATION</h4>
+                    <div class="moment-value" style="color:#cccccc">N/A</div>
+                    <div class="sub-info">Need more refresh points</div>
+                </div>
+                ''', unsafe_allow_html=True)
     
     # ============================================
     # 🎯 SUPER PROMINENT ENTRY SIGNAL
@@ -4732,44 +4732,47 @@ def render_nifty_option_screener():
     
     st.markdown("---")
     
-    # ============================================
-    # 🎯 SELLER'S BIAS
-    # ============================================
-    
-    st.markdown(f"""
-    <div class='seller-bias-box'>
-        <h3>🎯 SELLER'S MARKET BIAS</h3>
-        <div class='bias-value' style='color:{seller_bias_result["color"]}'>
-            {seller_bias_result["bias"]}
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 2: SELLER'S PERSPECTIVE
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[2]:
+        st.markdown("## 🎪 SELLER'S PERSPECTIVE")
+
+        st.markdown(f"""
+        <div class='seller-bias-box'>
+            <h3>🎯 SELLER'S MARKET BIAS</h3>
+            <div class='bias-value' style='color:{seller_bias_result["color"]}'>
+                {seller_bias_result["bias"]}
+            </div>
+            <p>Polarity Score: {seller_bias_result["polarity"]:.2f}</p>
         </div>
-        <p>Polarity Score: {seller_bias_result["polarity"]:.2f}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown(f"""
-    <div class='seller-explanation'>
-        <h4>🧠 SELLER'S THINKING:</h4>
-        <p><strong>{seller_bias_result["explanation"]}</strong></p>
-        <p><strong>Action:</strong> {seller_bias_result["action"]}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Core Metrics with OI/PCR
-    st.markdown("## 📈 SELLER'S MARKET OVERVIEW")
-    
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Spot", f"₹{spot:.2f}")
-        st.metric("ATM", f"₹{atm_strike}")
-    with col2:
-        st.metric("CALL Sellers", f"{ce_selling} strikes")
-        st.metric("PUT Sellers", f"{pe_selling} strikes")
-    with col3:
-        st.metric("PCR", f"{oi_pcr_metrics['pcr_total']:.2f}")
-        st.metric("PCR Sentiment", oi_pcr_metrics['pcr_sentiment'])
-    with col4:
-        st.metric("Total GEX", f"₹{int(total_gex_net):,}")
-        st.metric("Breakout Index", f"{seller_breakout_index}%")
+        """, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div class='seller-explanation'>
+            <h4>🧠 SELLER'S THINKING:</h4>
+            <p><strong>{seller_bias_result["explanation"]}</strong></p>
+            <p><strong>Action:</strong> {seller_bias_result["action"]}</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Core Metrics with OI/PCR
+        st.markdown("### 📈 SELLER'S MARKET OVERVIEW")
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Spot", f"₹{spot:.2f}")
+            st.metric("ATM", f"₹{atm_strike}")
+        with col2:
+            st.metric("CALL Sellers", f"{ce_selling} strikes")
+            st.metric("PUT Sellers", f"{pe_selling} strikes")
+        with col3:
+            st.metric("PCR", f"{oi_pcr_metrics['pcr_total']:.2f}")
+            st.metric("PCR Sentiment", oi_pcr_metrics['pcr_sentiment'])
+        with col4:
+            st.metric("Total GEX", f"₹{int(total_gex_net):,}")
+            st.metric("Breakout Index", f"{seller_breakout_index}%")
     
     # Max Pain Display
     if seller_max_pain:
