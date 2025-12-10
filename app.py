@@ -37,7 +37,6 @@ from data_cache_manager import (
 )
 from vob_signal_generator import VOBSignalGenerator
 from htf_sr_signal_generator import HTFSRSignalGenerator
-from NiftyOptionScreener import render_nifty_option_screener
 
 # Configure logging
 logger = logging.getLogger(__name__)
