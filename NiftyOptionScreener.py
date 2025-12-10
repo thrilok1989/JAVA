@@ -3865,7 +3865,7 @@ def render_nifty_option_screener():
         st.markdown("---")
         
         # Save interval
-        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60)
+        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60, key="pcr_autosave_interval")
         
         # Telegram settings
         st.markdown("---")
