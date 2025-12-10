@@ -863,12 +863,13 @@ if should_run_signal_check and (current_time - st.session_state.last_vob_check_t
                     # Convert HTF data to list format expected by proximity system
                     htf_data_list = []
                     if st.session_state.htf_data_nifty:
-                        for timeframe, levels in st.session_state.htf_data_nifty.items():
-                            if levels:
+                        # htf_data_nifty is already a list, iterate directly
+                        for level_data in st.session_state.htf_data_nifty:
+                            if level_data:
                                 htf_data_list.append({
-                                    'timeframe': timeframe,
-                                    'pivot_high': levels.get('resistance'),
-                                    'pivot_low': levels.get('support')
+                                    'timeframe': level_data.get('timeframe'),
+                                    'pivot_high': level_data.get('pivot_high'),
+                                    'pivot_low': level_data.get('pivot_low')
                                 })
 
                     # Process proximity alerts for NIFTY
@@ -893,12 +894,13 @@ if should_run_signal_check and (current_time - st.session_state.last_vob_check_t
                     # Convert HTF data to list format
                     htf_data_list_sensex = []
                     if st.session_state.htf_data_sensex:
-                        for timeframe, levels in st.session_state.htf_data_sensex.items():
-                            if levels:
+                        # htf_data_sensex is already a list, iterate directly
+                        for level_data in st.session_state.htf_data_sensex:
+                            if level_data:
                                 htf_data_list_sensex.append({
-                                    'timeframe': timeframe,
-                                    'pivot_high': levels.get('resistance'),
-                                    'pivot_low': levels.get('support')
+                                    'timeframe': level_data.get('timeframe'),
+                                    'pivot_high': level_data.get('pivot_high'),
+                                    'pivot_low': level_data.get('pivot_low')
                                 })
 
                     # Process proximity alerts for SENSEX
@@ -1524,10 +1526,12 @@ with col1:
         df_nifty = get_cached_chart_data('^NSEI', '7d', '1m')
 
         # Get latest support and resistance levels
-        for timeframe, levels in st.session_state.htf_data_nifty.items():
-            if levels and df_nifty is not None:
-                support = levels.get('support')
-                resistance = levels.get('resistance')
+        # htf_data_nifty is a list, iterate directly
+        for level_data in st.session_state.htf_data_nifty:
+            if level_data and df_nifty is not None:
+                timeframe = level_data.get('timeframe')
+                support = level_data.get('pivot_low')
+                resistance = level_data.get('pivot_high')
 
                 if support:
                     support_strength = htf_tracker.calculate_strength(support, 'SUPPORT', df_nifty, lookback_periods=100)
@@ -1573,10 +1577,12 @@ with col2:
         df_sensex = get_cached_chart_data('^BSESN', '7d', '1m')
 
         # Get latest support and resistance levels
-        for timeframe, levels in st.session_state.htf_data_sensex.items():
-            if levels and df_sensex is not None:
-                support = levels.get('support')
-                resistance = levels.get('resistance')
+        # htf_data_sensex is a list, iterate directly
+        for level_data in st.session_state.htf_data_sensex:
+            if level_data and df_sensex is not None:
+                timeframe = level_data.get('timeframe')
+                support = level_data.get('pivot_low')
+                resistance = level_data.get('pivot_high')
 
                 if support:
                     support_strength = htf_tracker.calculate_strength(support, 'SUPPORT', df_sensex, lookback_periods=100)
