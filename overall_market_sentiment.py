@@ -1299,54 +1299,25 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 st.dataframe(tech_df, use_container_width=True, hide_index=True)
 
     # ─────────────────────────────────────────────────────────────────
-    # 3. NIFTY OPTION SCREENER v7.0 (SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR)
+    # 3. NIFTY OPTION SCREENER v7.0 - LINK TO DEDICATED TAB
     # ─────────────────────────────────────────────────────────────────
     st.markdown("---")
-    with st.expander("**🎯 Nifty Option Screener v7.0 - Seller's Perspective + ATM Bias Analyzer + Moment Detector**", expanded=True):
-        st.markdown("""
-        ### 🎯 NIFTY Option Chain Analysis (Seller's Perspective)
+    st.markdown("### 🎯 NIFTY Option Screener v7.0")
+    st.info("""
+    **🎯 For the complete NIFTY Option Screener v7.0 with Seller's Perspective, ATM Bias Analyzer,
+    Moment Detector, Expiry Spike Detector, and Enhanced OI/PCR Analytics, please visit the dedicated
+    "NIFTY Option Screener v7.0" tab.**
 
-        **100% SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + MOMENT DETECTOR + EXPIRY SPIKE DETECTOR + ENHANCED OI/PCR ANALYTICS**
-
-        All interpretations from Option Seller/Market Maker viewpoint:
-        - **CALL building** = BEARISH (sellers selling calls, expecting price to stay below)
-        - **PUT building** = BULLISH (sellers selling puts, expecting price to stay above)
-
-        **New in v7.0:**
-        - 12-metric ATM Bias Analyzer
-        - Enhanced OI/PCR Analytics
-        - Improved Moment Detection
-        - Expiry Spike Detector
-        """)
-
-        try:
-            from NiftyOptionScreener import render_nifty_option_screener
-
-            # Render the comprehensive Nifty Option Screener v7.0
-            render_nifty_option_screener()
-
-        except ImportError as e:
-            st.error(f"❌ Failed to load Nifty Option Screener v7.0: {e}")
-            st.info("""
-            ### ⚙️ Setup Instructions:
-
-            1. Ensure `NiftyOptionScreener.py` is in the project directory
-            2. Add required credentials to `.streamlit/secrets.toml`:
-
-            ```toml
-            DHAN_CLIENT_ID = "your_dhan_client_id"
-            DHAN_ACCESS_TOKEN = "your_dhan_access_token"
-
-            # Optional for advanced features:
-            SUPABASE_URL = "your_supabase_url"
-            SUPABASE_ANON_KEY = "your_supabase_key"
-            TELEGRAM_BOT_TOKEN = "your_telegram_token"
-            TELEGRAM_CHAT_ID = "your_chat_id"
-            ```
-            """)
-        except Exception as e:
-            st.error(f"❌ Error rendering Nifty Option Screener: {e}")
-            st.exception(e)
+    **Features available in the dedicated tab:**
+    - 100% Seller's Perspective Analysis
+    - 12-metric ATM Bias Analyzer
+    - Enhanced OI/PCR Analytics Dashboard
+    - Real-time Moment Detection
+    - Expiry Spike Probability Detector
+    - Gamma Exposure Analysis
+    - Max Pain Calculations
+    - And much more!
+    """)
 
     # ─────────────────────────────────────────────────────────────────
     # 5. PERPLEXITY AI MARKET INSIGHTS (REAL-TIME WEB RESEARCH)

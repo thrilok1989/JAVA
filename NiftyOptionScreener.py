@@ -3764,8 +3764,7 @@ def render_nifty_option_screener():
     - Expiry Spike Detector
     - Enhanced OI/PCR Analytics
     """
-    st.title("🎯 NIFTY Option Screener v7.0 — SELLER'S PERSPECTIVE + ATM BIAS ANALYZER + Moment Detector + Expiry Spike + OI/PCR ANALYTICS")
-
+    # Display current IST time
     current_ist = get_ist_datetime_str()
     st.markdown(f"""
     <div style='text-align: center; margin-bottom: 20px;'>
