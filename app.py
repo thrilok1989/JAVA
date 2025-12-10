@@ -210,7 +210,7 @@ if 'performance_mode' not in st.session_state:
 
 # Get API keys from Streamlit secrets
 NEWSDATA_API_KEY = st.secrets.get("NEWSDATA_API_KEY", "")
-GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", "")
+PERPLEXITY_API_KEY = st.secrets.get("PERPLEXITY_API_KEY", "")
 
 # Initialize AI analysis tracking
 if 'last_ai_analysis_time' not in st.session_state:
@@ -272,12 +272,12 @@ async def run_ai_market_analysis():
         
         # Run AI analysis with save and telegram send
         report = await run_ai_analysis(
-            overall_market, 
-            module_biases, 
-            market_meta, 
+            overall_market,
+            module_biases,
+            market_meta,
             news_api_key=NEWSDATA_API_KEY,  # Uses the variable from secrets
-            groq_api_key=GROQ_API_KEY,      # Uses the variable from secrets
-            save_report=True, 
+            perplexity_api_key=PERPLEXITY_API_KEY,  # Uses the variable from secrets
+            save_report=True,
             telegram_send=True
         )
         
@@ -552,9 +552,9 @@ with st.sidebar:
     st.divider()
     
     # AI Analysis Status
-    st.subheader("🤖 AI Market Analysis")
-    if NEWSDATA_API_KEY and GROQ_API_KEY:
-        st.success("✅ API Keys Configured")
+    st.subheader("🤖 AI Market Analysis (Powered by Perplexity AI)")
+    if NEWSDATA_API_KEY and PERPLEXITY_API_KEY:
+        st.success("✅ API Keys Configured (Perplexity AI)")
         
         # Show last AI analysis time
         if st.session_state.last_ai_analysis_time > 0:
@@ -592,7 +592,7 @@ with st.sidebar:
                     st.error(f"❌ AI analysis failed: {e}")
     else:
         st.warning("⚠️ API Keys Required")
-        st.caption("Set NEWSDATA_API_KEY and GROQ_API_KEY in Streamlit secrets (.streamlit/secrets.toml)")
+        st.caption("Set NEWSDATA_API_KEY and PERPLEXITY_API_KEY in Streamlit secrets (.streamlit/secrets.toml)")
     
     st.divider()
 
