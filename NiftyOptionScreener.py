@@ -1653,31 +1653,20 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, atm_bias_pl
 
     st.markdown("---")
 
-    # Row 4: Expiry & PCR Analysis
-    col1, col2 = st.columns(2)
+    # Row 4: Expiry Analysis (PCR Analysis removed - available in Seller PCR tab)
+    st.markdown("### 📅 Expiry Analysis")
+    if expiry_spike_data:
+        spike_prob = expiry_spike_data.get("expiry_spike_probability", "N/A")
+        key_levels = expiry_spike_data.get("key_resistance_levels", [])
 
-    with col1:
-        st.markdown("### 📅 Expiry Analysis")
-        if expiry_spike_data:
-            spike_prob = expiry_spike_data.get("expiry_spike_probability", "N/A")
-            key_levels = expiry_spike_data.get("key_resistance_levels", [])
-
+        col1, col2 = st.columns(2)
+        with col1:
             st.markdown(f"**Spike Probability**: {spike_prob}")
+        with col2:
             if key_levels:
                 st.markdown(f"**Key Levels**: {', '.join(map(str, key_levels[:3]))}")
-        else:
-            st.info("No expiry spike data")
-
-    with col2:
-        st.markdown("### 📊 PCR Analysis")
-        if oi_pcr_metrics:
-            pcr = oi_pcr_metrics.get("PCR_OI", "N/A")
-            sentiment = oi_pcr_metrics.get("sentiment", "N/A")
-
-            st.markdown(f"**PCR (OI)**: {pcr}")
-            st.markdown(f"**Sentiment**: {sentiment}")
-        else:
-            st.info("No PCR data")
+    else:
+        st.info("No expiry spike data")
 
     st.markdown("---")
 
@@ -3865,13 +3854,13 @@ def render_nifty_option_screener():
         st.markdown("---")
         
         # Save interval
-        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60, key="pcr_autosave_interval")
+        save_interval = st.number_input("PCR Auto-save (sec)", value=SAVE_INTERVAL_SEC, min_value=60, step=60, key="nifty_screener_pcr_autosave_interval")
         
         # Telegram settings
         st.markdown("---")
         st.markdown("### 🤖 TELEGRAM SETTINGS")
-        auto_send = st.checkbox("Auto-send signals to Telegram", value=False, key="auto_send_telegram")
-        show_signal_preview = st.checkbox("Show signal preview", value=True, key="show_signal_preview")
+        auto_send = st.checkbox("Auto-send signals to Telegram", value=False, key="nifty_screener_auto_send_telegram")
+        show_signal_preview = st.checkbox("Show signal preview", value=True, key="nifty_screener_show_signal_preview")
         
         if st.button("Clear Caches"):
             st.cache_data.clear()
@@ -3891,7 +3880,7 @@ def render_nifty_option_screener():
             st.error("Unable to fetch expiry list")
             st.stop()
 
-        expiry = st.selectbox("Select expiry", expiries, index=0, key="expiry_selector")
+        expiry = st.selectbox("Select expiry", expiries, index=0, key="nifty_screener_expiry_selector")
     
     with col2:
         if spot > 0:
