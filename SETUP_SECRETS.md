@@ -71,10 +71,14 @@ Enable AI-powered market insights:
    ENABLE_AI_ANALYSIS = "true"
    ```
 
-2. **Groq AI** (Alternative): Get API key from [Groq](https://groq.com/)
+2. **Perplexity AI**: Get API key from [Perplexity](https://www.perplexity.ai/settings/api)
+   - Pro subscribers get $5 monthly credits automatically
+   - Supports real-time web research and market analysis
    ```toml
-   [GROQ]
-   API_KEY = "gsk_xxxxxxxxxxxxx"
+   [PERPLEXITY]
+   API_KEY = "pplx-xxxxxxxxxxxxx"
+   MODEL = "sonar"  # Options: sonar, sonar-pro
+   SEARCH_DEPTH = "medium"  # Options: low, medium, high
    ```
 
 3. **NewsData.io**: Get API key from [NewsData.io](https://newsdata.io/)

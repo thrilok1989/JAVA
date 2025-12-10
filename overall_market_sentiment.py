@@ -18,6 +18,7 @@ import time
 import asyncio
 from market_hours_scheduler import is_within_trading_hours, scheduler
 from ai_analysis_adapter import run_ai_analysis, shutdown_ai_engine
+from perplexity_market_insights import render_market_insights_widget
 
 
 def calculate_stock_performance_sentiment(stock_data):
@@ -766,8 +767,8 @@ async def _run_ai_analysis():
         
         # Get API keys from environment or session state
         news_api_key = os.environ.get('NEWS_API_KEY') or st.session_state.get('news_api_key')
-        groq_api_key = os.environ.get('GROQ_API_KEY') or st.session_state.get('groq_api_key')
-        
+        perplexity_api_key = os.environ.get('PERPLEXITY_API_KEY') or st.session_state.get('perplexity_api_key')
+
         # Run AI analysis
         with st.spinner("🤖 Running AI Market Analysis..."):
             ai_report = await run_ai_analysis(
@@ -775,7 +776,7 @@ async def _run_ai_analysis():
                 module_biases=module_biases,
                 market_meta=market_meta,
                 news_api_key=news_api_key,
-                groq_api_key=groq_api_key,
+                perplexity_api_key=perplexity_api_key,
                 save_report=True,
                 telegram_send=False  # Disable telegram for auto-refresh
             )
@@ -1348,8 +1349,42 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             st.exception(e)
 
     # ─────────────────────────────────────────────────────────────────
+    # 5. PERPLEXITY AI MARKET INSIGHTS (REAL-TIME WEB RESEARCH)
+    # ─────────────────────────────────────────────────────────────────
+    st.markdown("---")
+    with st.expander("**🤖 Perplexity AI Market Insights (Real-Time Research)**", expanded=False):
+        st.markdown("""
+        ### 🚀 AI-Powered Market Insights with Web Research
+
+        Get real-time market insights powered by Perplexity AI's advanced web research capabilities.
+
+        **Features:**
+        - Real-time market analysis with web citations
+        - Breaking news impact analysis
+        - Custom market questions answered
+        - Bias setup probability analysis
+        """)
+
+        # Get current bias data to provide context
+        bias_context = None
+        if 'bias_analysis_results' in st.session_state and st.session_state.bias_analysis_results:
+            analysis = st.session_state.bias_analysis_results
+            if analysis.get('success'):
+                bias_context = {
+                    'overall_bias': result.get('overall_sentiment', 'NEUTRAL'),
+                    'overall_confidence': result.get('confidence', 0),
+                    'bullish_count': result.get('bullish_sources', 0),
+                    'bearish_count': result.get('bearish_sources', 0),
+                    'current_price': analysis.get('current_price', 0)
+                }
+
+        # Render the insights widget
+        render_market_insights_widget(bias_context)
+
+    # ─────────────────────────────────────────────────────────────────
     # 6. AI MARKET ANALYSIS (NEW SECTION)
     # ─────────────────────────────────────────────────────────────────
+    st.markdown("---")
     if '🤖 AI Market Analysis' in sources:
         source_data = sources['🤖 AI Market Analysis']
         with st.expander("**🤖 AI Market Analysis (Enhanced with News & Global Data)**", expanded=True):
@@ -1743,14 +1778,14 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     with col2:
         # API Key Configuration
         with st.expander("🔧 Configure API Keys"):
-            news_api_key = st.text_input("News API Key", type="password", 
+            news_api_key = st.text_input("News API Key", type="password",
                                          value=st.session_state.get('news_api_key', ''))
-            groq_api_key = st.text_input("Groq API Key", type="password",
-                                        value=st.session_state.get('groq_api_key', ''))
-            
+            perplexity_api_key = st.text_input("Perplexity API Key", type="password",
+                                        value=st.session_state.get('perplexity_api_key', ''))
+
             if st.button("💾 Save API Keys"):
                 st.session_state.news_api_key = news_api_key
-                st.session_state.groq_api_key = groq_api_key
+                st.session_state.perplexity_api_key = perplexity_api_key
                 st.success("✅ API keys saved to session state")
 
     # Auto-refresh handled by the refresh logic at the top of this function

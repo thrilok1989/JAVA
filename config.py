@@ -52,16 +52,17 @@ def get_telegram_credentials():
 # AI CONFIGURATION - Loaded from Streamlit Secrets
 # ═══════════════════════════════════════════════════════════════════════
 
-def get_groq_credentials():
-    """Load Groq credentials from secrets"""
+def get_perplexity_credentials():
+    """Load Perplexity credentials from secrets"""
     try:
         return {
-            'api_key': st.secrets["GROQ"]["API_KEY"],
-            'model': st.secrets["GROQ"].get("MODEL", "llama3-70b-8192"),
+            'api_key': st.secrets["PERPLEXITY"]["API_KEY"],
+            'model': st.secrets["PERPLEXITY"].get("MODEL", "sonar"),
+            'search_depth': st.secrets["PERPLEXITY"].get("SEARCH_DEPTH", "medium"),
             'enabled': True
         }
     except Exception as e:
-        print(f"⚠️ Groq credentials missing: {e}")
+        print(f"⚠️ Perplexity credentials missing: {e}")
         return {'enabled': False}
 
 def get_newsdata_credentials():
@@ -148,12 +149,12 @@ def get_all_credentials():
     return {
         'dhan': get_dhan_credentials(),
         'telegram': get_telegram_credentials(),
-        'groq': get_groq_credentials(),
+        'perplexity': get_perplexity_credentials(),
         'newsdata': get_newsdata_credentials()
     }
 
 def is_ai_enabled():
     """Check if AI features are enabled"""
-    groq_creds = get_groq_credentials()
+    perplexity_creds = get_perplexity_credentials()
     newsdata_creds = get_newsdata_credentials()
-    return groq_creds.get('enabled', False) and newsdata_creds.get('enabled', False)
+    return perplexity_creds.get('enabled', False) and newsdata_creds.get('enabled', False)

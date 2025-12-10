@@ -1,7 +1,7 @@
 # FILE: integrations/ai_market_engine.py
 # Path: integrations/ai_market_engine.py
 """
-AI Market Engine integrating NewsData + Groq LLaMA.
+AI Market Engine integrating NewsData + Perplexity AI.
 - Saves reports to ai_reports/ai_report_<ts>.json
 - Sends Telegram alerts via telegram_alerts.send_ai_market_alert(report)
 - Toggle run-only-when-directional with env AI_RUN_ONLY_DIRECTIONAL=1
@@ -15,17 +15,13 @@ import json
 import asyncio
 from typing import Dict, List, Optional, Any, Tuple
 import pathlib
-
-# optional groq SDK
-try:
-    from groq import Groq
-except Exception:
-    Groq = None
+import requests
 
 from integrations.news_fetcher import NewsFetcher
 
 # defaults
-DEFAULT_GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama3-70b-8192")
+DEFAULT_PERPLEXITY_MODEL = os.environ.get("PERPLEXITY_MODEL", "sonar")
+DEFAULT_PERPLEXITY_SEARCH_DEPTH = os.environ.get("PERPLEXITY_SEARCH_DEPTH", "medium")
 DEFAULT_WEIGHTS = {
     "htf_sr": 0.25,
     "vob": 0.20,
@@ -69,22 +65,18 @@ class WeightedBiasEngine:
         aggregated = sum(contributions.values())
         return _clamp(aggregated), contributions
 
-class GroqClient:
-    def __init__(self, api_key: Optional[str], model: str = DEFAULT_GROQ_MODEL):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY")
+class PerplexityClient:
+    def __init__(self, api_key: Optional[str], model: str = DEFAULT_PERPLEXITY_MODEL, search_depth: str = DEFAULT_PERPLEXITY_SEARCH_DEPTH):
+        self.api_key = api_key or os.environ.get("PERPLEXITY_API_KEY")
         self.model = model
-        self._client = None
-        if Groq and self.api_key:
-            try:
-                self._client = Groq(api_key=self.api_key)
-            except Exception:
-                self._client = None
+        self.search_depth = search_depth
+        self.base_url = "https://api.perplexity.ai/openai/chat/completions"
 
     async def ready(self) -> bool:
-        return self._client is not None
+        return self.api_key is not None
 
     def _build_prompt(self, texts: List[str], hint: Optional[str] = None) -> str:
-        header = "You are an expert market analyst. Return JSON: {summary: str, score: float (-1..1), reasons: [str,...]}.\n"
+        header = "You are an expert market analyst. Analyze the following market data and return JSON: {summary: str, score: float (-1..1), reasons: [str,...]}.\n"
         if hint:
             header += f"Context: {hint}\n"
         body = "\n".join(f"- {t}" for t in texts[:12])
@@ -116,21 +108,44 @@ class GroqClient:
     async def summarize_and_score(self, texts: List[str], hint: Optional[str] = None) -> Dict[str, Any]:
         if not await self.ready():
             return self._fallback(texts)
+
         prompt = self._build_prompt(texts, hint)
+
         try:
-            resp = self._client.chat.completions.create(messages=[{"role":"user","content": prompt}], model=self.model, max_tokens=512, temperature=0.0)
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 512,
+                "temperature": 0.0
+            }
+
+            response = requests.post(
+                self.base_url,
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+
+            if response.status_code != 200:
+                print(f"⚠️ Perplexity API error: {response.status_code} - {response.text}")
+                return self._fallback(texts)
+
+            resp_json = response.json()
             content = None
-            if isinstance(resp, dict):
-                choices = resp.get("choices") or []
-                if choices:
-                    msg = choices[0].get("message") or {}
-                    content = msg.get("content") or choices[0].get("text")
-            else:
-                choices = getattr(resp, "choices", None)
-                if choices:
-                    content = getattr(choices[0].message, "content", None) or getattr(choices[0], "text", None)
+
+            if "choices" in resp_json and len(resp_json["choices"]) > 0:
+                choice = resp_json["choices"][0]
+                if "message" in choice:
+                    content = choice["message"].get("content")
+
             if not content:
                 return self._fallback(texts)
+
             try:
                 j = json.loads(content)
                 if "score" in j:
@@ -142,13 +157,15 @@ class GroqClient:
                 m = re.search(r"([+-]?\d\.\d+)", content)
                 sc = float(m.group(1)) if m else 0.0
                 return {"summary": content.strip()[:800], "score": _clamp(sc), "reasons": content.strip().splitlines()[:3]}
-        except Exception:
+
+        except Exception as e:
+            print(f"⚠️ Perplexity API exception: {str(e)}")
             return self._fallback(texts)
 
 class AIMarketEngine:
-    def __init__(self, news_api_key: Optional[str] = None, groq_api_key: Optional[str] = None, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, news_api_key: Optional[str] = None, perplexity_api_key: Optional[str] = None, weights: Optional[Dict[str, float]] = None):
         self.news = NewsFetcher(api_key=news_api_key)
-        self.groq = GroqClient(api_key=groq_api_key)
+        self.perplexity = PerplexityClient(api_key=perplexity_api_key)
         self.bias_engine = WeightedBiasEngine(weights=weights or DEFAULT_WEIGHTS)
         self._news_ttl = DEFAULT_NEWS_TTL
         pathlib.Path(AI_REPORT_DIR).mkdir(parents=True, exist_ok=True)
@@ -166,7 +183,7 @@ class AIMarketEngine:
         raw_news = await self.news.fetch_headlines(q=query, max_items=DEFAULT_MAX_HEADLINES, ttl=self._news_ttl)
         texts = [ (a.get("title") or "") + " — " + (a.get("description") or "") for a in raw_news ]
 
-        news_result = await self.groq.summarize_and_score(texts, hint=f"Market hint: {overall}. Technical score: {technical_score:.3f}")
+        news_result = await self.perplexity.summarize_and_score(texts, hint=f"Market hint: {overall}. Technical score: {technical_score:.3f}")
         news_score = float(news_result.get("score", 0.0))
         news_summary = news_result.get("summary", "")[:1200]
         news_reasons = news_result.get("reasons", []) or []
@@ -185,7 +202,7 @@ class AIMarketEngine:
         ai_summary = ""
         ai_reasons = []
         ai_score = combined
-        if await self.groq.ready():
+        if await self.perplexity.ready():
             justification_text = (
                 f"Overall market: {overall}\n"
                 f"Technical score: {technical_score:.4f}\n"
@@ -195,7 +212,7 @@ class AIMarketEngine:
                 f"Market meta: {json.dumps(market_meta or {})}\n"
                 "Return JSON with keys: ai_score (float -1..1), label, confidence (0..1), reasons (list).\n"
             )
-            resp = await self.groq.summarize_and_score([justification_text], hint="Finalize market decision")
+            resp = await self.perplexity.summarize_and_score([justification_text], hint="Finalize market decision")
             ai_score = float(resp.get("score", combined))
             ai_summary = resp.get("summary", "")[:1500]
             if isinstance(resp.get("reasons", None), list):

@@ -34,53 +34,53 @@ except ImportError as e:
 
 _ai_engine: Optional[AIMarketEngine] = None
 
-def get_ai_engine(news_api_key: Optional[str] = None, groq_api_key: Optional[str] = None, weights: Optional[Dict[str, float]] = None) -> Optional[AIMarketEngine]:
+def get_ai_engine(news_api_key: Optional[str] = None, perplexity_api_key: Optional[str] = None, weights: Optional[Dict[str, float]] = None) -> Optional[AIMarketEngine]:
     """
     Get or create the AI engine instance.
     """
     global _ai_engine
-    
+
     if not AI_ENGINE_AVAILABLE:
         print("❌ AI Engine not available - feature disabled")
         return None
-    
+
     if _ai_engine is None:
         try:
-            print("🤖 Initializing AI Market Engine...")
+            print("🤖 Initializing AI Market Engine with Perplexity AI...")
             _ai_engine = AIMarketEngine(
-                news_api_key=news_api_key, 
-                groq_api_key=groq_api_key, 
+                news_api_key=news_api_key,
+                perplexity_api_key=perplexity_api_key,
                 weights=weights
             )
-            print("✅ AI Market Engine initialized successfully")
+            print("✅ AI Market Engine initialized successfully with Perplexity AI")
         except Exception as e:
             print(f"❌ Error initializing AI Engine: {e}")
             return None
     return _ai_engine
 
 async def run_ai_analysis(
-    overall_market: str, 
-    module_biases: Dict[str, float], 
-    market_meta: Optional[Dict[str, Any]] = None, 
-    news_api_key: Optional[str] = None, 
-    groq_api_key: Optional[str] = None, 
-    weights: Optional[Dict[str, float]] = None, 
-    save_report: bool = True, 
+    overall_market: str,
+    module_biases: Dict[str, float],
+    market_meta: Optional[Dict[str, Any]] = None,
+    news_api_key: Optional[str] = None,
+    perplexity_api_key: Optional[str] = None,
+    weights: Optional[Dict[str, float]] = None,
+    save_report: bool = True,
     telegram_send: bool = True
 ) -> Dict[str, Any]:
     """
     Run AI market analysis.
-    
+
     Args:
         overall_market: Market description (e.g., "Indian Stock Market")
         module_biases: Dictionary of module biases/scores
         market_meta: Additional market metadata
         news_api_key: News API key
-        groq_api_key: Groq API key
+        perplexity_api_key: Perplexity API key
         weights: Module weights for analysis
         save_report: Whether to save the report
         telegram_send: Whether to send to Telegram
-    
+
     Returns:
         Dictionary with analysis results
     """
@@ -94,10 +94,10 @@ async def run_ai_analysis(
             'reasoning': ['AI analysis feature is disabled'],
             'final_verdict': 'AI analysis unavailable. Using traditional analysis only.'
         }
-    
+
     engine = get_ai_engine(
-        news_api_key=news_api_key, 
-        groq_api_key=groq_api_key, 
+        news_api_key=news_api_key,
+        perplexity_api_key=perplexity_api_key,
         weights=weights
     )
     

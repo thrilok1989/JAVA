@@ -15,11 +15,19 @@ DHAN_CLIENT_ID = "DHAN_CLIENT_ID_FROM_DHAN"
 DHAN_ACCESS_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiJ9.your_dhan_token_here"
 
 # ============================================
-# 🤖 OPTIONAL SECRETS (AI Features)
+# 🤖 OPTIONAL SECRETS (AI Features - Perplexity AI)
 # ============================================
 
-# Groq AI Configuration (for AI analysis)
-GROQ_API_KEY = "gsk_your_groq_api_key_here"
+# Perplexity AI Configuration (for AI analysis)
+[PERPLEXITY]
+API_KEY = "pplx-your_perplexity_api_key_here"
+MODEL = "sonar"  # Options: sonar, sonar-pro
+SEARCH_DEPTH = "medium"  # Options: low, medium, high
+
+# NewsData API for market news
+[NEWSDATA]
+API_KEY = "pub_your_newsdata_api_key_here"
+
 ENABLE_AI_ANALYSIS = "true"
 
 # ============================================
@@ -46,10 +54,9 @@ SHOW_AI_ANALYSIS = "true"
 SHOW_TELEGRAM_SIGNALS = "true"
 ENABLE_SOUND_ALERTS = "false"
 
-# .streamlit/secrets.toml
-# OLD:
-# GROQ_API_KEY = "your_groq_api_key_here"
-
-# NEW:
-PERPLEXITY_API_KEY = "your_perplexity_api_key_here"
-ENABLE_AI_ANALYSIS = "true"
+# ============================================
+# 📝 MIGRATION NOTES
+# ============================================
+# The app now uses Perplexity AI instead of GROQ
+# Configure PERPLEXITY section above with your API key
+# Get your Perplexity API key from: https://www.perplexity.ai/settings/api
