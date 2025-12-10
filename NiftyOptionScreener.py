@@ -4086,16 +4086,49 @@ def render_nifty_option_screener():
         expiry_pcr_context = analyze_pcr_for_expiry(oi_pcr_metrics['pcr_total'], days_to_expiry)
         st.warning(f"""
         **⚠️ Expiry Context (D-{int(days_to_expiry)}):** {expiry_pcr_context}
-        
+
         PCR readings near expiry often exaggerate due to position squaring.
         """)
-    
+
+    st.markdown("---")
+
     # ============================================
-    # 🎯 MULTI-DIMENSIONAL BIAS ANALYSIS (NEW)
+    # 📊 OVERALL MARKET SENTIMENT SUMMARY
     # ============================================
+
+    # Create ATM ±2 strikes tabulation
+    strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+
+    # Calculate expiry spike data
+    expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+    # Get sector rotation data from enhanced market data if available
+    sector_rotation_data = None
+    if 'enhanced_market_data' in st.session_state:
+        enhanced_data = st.session_state.enhanced_market_data
+        if 'sector_rotation' in enhanced_data:
+            sector_rotation_data = enhanced_data['sector_rotation']
 
     # Calculate Overall Bias from all analyses
     overall_bias = calculate_overall_bias(atm_bias, support_bias, resistance_bias, seller_bias_result)
+
+    # Display the reorganized Overall Market Sentiment Summary Dashboard
+    display_overall_market_sentiment_summary(
+        overall_bias=overall_bias,
+        atm_bias=atm_bias,
+        seller_max_pain=seller_max_pain,
+        total_gex_net=total_gex_net,
+        expiry_spike_data=expiry_spike_data,
+        oi_pcr_metrics=oi_pcr_metrics,
+        strike_analyses=strike_analyses,
+        sector_rotation_data=sector_rotation_data
+    )
+
+    st.markdown("---")
+
+    # ============================================
+    # 🎯 MULTI-DIMENSIONAL BIAS ANALYSIS (NEW)
+    # ============================================
 
     # Display Overall Bias Banner at the top
     st.markdown(f"""
@@ -4144,40 +4177,11 @@ def render_nifty_option_screener():
         if atm_bias or support_bias or resistance_bias:
             display_bias_dashboard(atm_bias, support_bias, resistance_bias)
 
-        # ============================================
-        # 📊 OVERALL MARKET SENTIMENT SUMMARY (NEW)
-        # ============================================
-
-        # Create ATM ±2 strikes tabulation
-        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
-
-        # Calculate expiry spike data early for the summary
-        expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
-
-        # Get sector rotation data from enhanced market data if available
-        sector_rotation_data = None
-        if 'enhanced_market_data' in st.session_state:
-            enhanced_data = st.session_state.enhanced_market_data
-            if 'sector_rotation' in enhanced_data:
-                sector_rotation_data = enhanced_data['sector_rotation']
-
-        # Display the reorganized Overall Market Sentiment Summary Dashboard
-        display_overall_market_sentiment_summary(
-            overall_bias=overall_bias,
-            atm_bias=atm_bias,
-            seller_max_pain=seller_max_pain,
-            total_gex_net=total_gex_net,
-            expiry_spike_data=expiry_spike_data,
-            oi_pcr_metrics=oi_pcr_metrics,
-            strike_analyses=strike_analyses,
-            sector_rotation_data=sector_rotation_data
-        )
-
     # ============================================
     # 📅 EXPIRY SPIKE DETECTION
     # ============================================
 
-    # Expiry spike data already calculated above for the summary dashboard
+    # Expiry spike data already calculated in Tab 0
 
     # Advanced spike detection (optional)
     violent_unwinding_signals = detect_violent_unwinding(merged, spot, atm_strike)
