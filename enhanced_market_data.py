@@ -669,30 +669,20 @@ class EnhancedMarketData:
         else:
             sector_breadth = 50
 
-        # Determine rotation pattern
+        # Determine rotation pattern (for informational purposes only)
         if len(leaders) > 0 and leaders[0]['change_pct'] > 2:
             rotation_pattern = "STRONG ROTATION"
             if 'IT' in leaders[0]['sector'] or 'PHARMA' in leaders[0]['sector']:
                 rotation_type = "DEFENSIVE ROTATION (Risk-off)"
-                rotation_bias = "BEARISH"
-                rotation_score = -40
             elif 'METAL' in leaders[0]['sector'] or 'ENERGY' in leaders[0]['sector']:
                 rotation_type = "CYCLICAL ROTATION (Risk-on)"
-                rotation_bias = "BULLISH"
-                rotation_score = 60
             elif 'BANK' in leaders[0]['sector'] or 'AUTO' in leaders[0]['sector']:
                 rotation_type = "GROWTH ROTATION (Risk-on)"
-                rotation_bias = "BULLISH"
-                rotation_score = 70
             else:
                 rotation_type = "MIXED ROTATION"
-                rotation_bias = "NEUTRAL"
-                rotation_score = 0
         else:
             rotation_pattern = "NO CLEAR ROTATION"
             rotation_type = "CONSOLIDATION"
-            rotation_bias = "NEUTRAL"
-            rotation_score = 0
 
         # Overall sector sentiment (Based on Sector Breadth %)
         # Updated thresholds to align better with technical bias (60% threshold)
@@ -711,6 +701,11 @@ class EnhancedMarketData:
         else:
             sector_sentiment = "NEUTRAL"
             sector_score = 0
+
+        # IMPORTANT: Rotation Bias now ALWAYS matches Sector Breadth Sentiment
+        # This ensures consistency between sector sentiment and rotation bias
+        rotation_bias = sector_sentiment
+        rotation_score = sector_score
 
         return {
             'success': True,
