@@ -3558,29 +3558,57 @@ def rank_support_resistance_seller(pcr_df):
 # -----------------------
 # DHAN API
 # -----------------------
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=30)  # Increased cache to 30 seconds to reduce API calls
 def get_nifty_spot_price():
-    try:
-        url = f"{DHAN_BASE_URL}/v2/marketfeed/ltp"
-        payload = {"IDX_I": [13]}
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "access-token": DHAN_ACCESS_TOKEN,
-            "client-id": DHAN_CLIENT_ID
-        }
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if data.get("status") == "success":
-            idx_data = data.get("data", {}).get("IDX_I", {})
-            nifty_data = idx_data.get("13", {})
-            ltp = nifty_data.get("last_price", 0.0)
-            return float(ltp)
-        return 0.0
-    except Exception as e:
-        st.warning(f"Dhan LTP failed: {e}")
-        return 0.0
+    """Fetch NIFTY spot price with retry logic and rate limiting"""
+    max_retries = 3
+    retry_delays = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
+
+    for attempt in range(max_retries):
+        try:
+            url = f"{DHAN_BASE_URL}/v2/marketfeed/ltp"
+            payload = {"IDX_I": [13]}
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "access-token": DHAN_ACCESS_TOKEN,
+                "client-id": DHAN_CLIENT_ID
+            }
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+            # Handle rate limiting
+            if response.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delays[attempt]
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    st.warning(f"⚠️ Dhan API rate limit exceeded. Using cached data if available.")
+                    return 0.0
+
+            response.raise_for_status()
+            data = response.json()
+            if data.get("status") == "success":
+                idx_data = data.get("data", {}).get("IDX_I", {})
+                nifty_data = idx_data.get("13", {})
+                ltp = nifty_data.get("last_price", 0.0)
+                return float(ltp)
+            return 0.0
+        except requests.exceptions.HTTPError as e:
+            if attempt < max_retries - 1 and e.response.status_code == 429:
+                wait_time = retry_delays[attempt]
+                time.sleep(wait_time)
+                continue
+            st.warning(f"⚠️ Dhan LTP failed: {e}")
+            return 0.0
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delays[attempt])
+                continue
+            st.warning(f"⚠️ Dhan LTP failed: {e}")
+            return 0.0
+
+    return 0.0
 
 @st.cache_data(ttl=300)
 def get_expiry_list():
@@ -3603,26 +3631,56 @@ def get_expiry_list():
         st.warning(f"Expiry list failed: {e}")
         return []
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=30)  # Increased cache to 30 seconds to reduce API calls
 def fetch_dhan_option_chain(expiry_date):
-    try:
-        url = f"{DHAN_BASE_URL}/v2/optionchain"
-        payload = {"UnderlyingScrip":13,"UnderlyingSeg":"IDX_I","Expiry":expiry_date}
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "access-token": DHAN_ACCESS_TOKEN,
-            "client-id": DHAN_CLIENT_ID
-        }
-        r = requests.post(url, json=payload, headers=headers, timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("status")=="success":
-            return data.get("data",{})
-        return None
-    except Exception as e:
-        st.warning(f"Option chain failed: {e}")
-        return None
+    """Fetch option chain with retry logic and rate limiting"""
+    max_retries = 3
+    retry_delays = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
+
+    for attempt in range(max_retries):
+        try:
+            url = f"{DHAN_BASE_URL}/v2/optionchain"
+            payload = {"UnderlyingScrip":13,"UnderlyingSeg":"IDX_I","Expiry":expiry_date}
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "access-token": DHAN_ACCESS_TOKEN,
+                "client-id": DHAN_CLIENT_ID
+            }
+            r = requests.post(url, json=payload, headers=headers, timeout=15)
+
+            # Handle rate limiting
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delays[attempt]
+                    st.info(f"⏳ Rate limit hit. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    st.warning(f"⚠️ Dhan API rate limit exceeded. Please wait a moment and try again.")
+                    return None
+
+            r.raise_for_status()
+            data = r.json()
+            if data.get("status")=="success":
+                return data.get("data",{})
+            return None
+        except requests.exceptions.HTTPError as e:
+            if attempt < max_retries - 1 and e.response.status_code == 429:
+                wait_time = retry_delays[attempt]
+                st.info(f"⏳ Rate limit hit. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            st.warning(f"⚠️ Option chain failed: {e}")
+            return None
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delays[attempt])
+                continue
+            st.warning(f"⚠️ Option chain failed: {e}")
+            return None
+
+    return None
 
 def parse_dhan_option_chain(chain_data):
     if not chain_data:
