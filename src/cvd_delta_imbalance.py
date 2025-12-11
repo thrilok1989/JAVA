@@ -152,8 +152,8 @@ class CVDAnalyzer:
         df['buying_volume'] = df['volume'] * df['close_position']
         df['selling_volume'] = df['volume'] * (1 - df['close_position'])
 
-        # Volume delta
-        df['volume_delta'] = df['buying_volume'] - df['selling_volume']
+        # Volume delta (selling volume - buying volume)
+        df['volume_delta'] = df['selling_volume'] - df['buying_volume']
 
         return df
 
