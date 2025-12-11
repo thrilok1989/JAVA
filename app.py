@@ -3614,7 +3614,7 @@ with tab7:
                                     for bos in bos_data[-10:]:
                                         bos_table.append({
                                             'Index': bos.get('index', 'N/A'),
-                                            'Type': '🟢 Bullish' if bos['type'] == 'bullish' else '🔴 Bearish',
+                                            'Type': '🟢 Bullish' if bos['type'] == 'BULLISH' else '🔴 Bearish',
                                             'Price': f"₹{bos['price']:.2f}",
                                             'Strength': '🔴' * min(5, int(bos.get('strength', 1)))
                                         })
@@ -3632,7 +3632,7 @@ with tab7:
                                     for choch in choch_data[-10:]:
                                         choch_table.append({
                                             'Index': choch.get('index', 'N/A'),
-                                            'Type': '🟢 Bullish' if choch['type'] == 'bullish' else '🔴 Bearish',
+                                            'Type': '🟢 Bullish' if choch['type'] == 'BULLISH' else '🔴 Bearish',
                                             'Price': f"₹{choch['price']:.2f}",
                                         })
                                     st.dataframe(pd.DataFrame(choch_table), use_container_width=True, hide_index=True)
