@@ -1126,26 +1126,45 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         for instrument in ['NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY']
     )
 
-    # If option chain data is missing and we have NSE_INSTRUMENTS, offer to load it
+    # Initialize flag to track if option chain data has been loaded at least once
+    if 'option_chain_initial_load_done' not in st.session_state:
+        st.session_state.option_chain_initial_load_done = False
+
+    # If option chain data is missing and we have NSE_INSTRUMENTS
     if (option_data_missing or atm_data_missing) and NSE_INSTRUMENTS is not None:
+        # Auto-load on first page load (regardless of trading hours)
+        if not st.session_state.option_chain_initial_load_done:
+            with st.spinner("📊 Loading option chain data for all instruments..."):
+                try:
+                    success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True)
+                    st.session_state.option_chain_initial_load_done = True
+                    if success_oc:
+                        st.success("✅ Option chain data loaded successfully!")
+                        st.rerun()
+                    else:
+                        st.warning(f"⚠️ Some option chain data failed to load: {', '.join(errors_oc)}")
+                except Exception as e:
+                    st.warning(f"⚠️ Error loading option chain data: {str(e)}")
+                    st.info("💡 You can manually reload using the button below if needed.")
+
+        # After initial load, show manual reload button when market is closed
         if not is_within_trading_hours():
-            # Market is closed - show manual load button
-            if st.button("📊 Load Option Chain Data (PCR & ATM Metrics)",
-                        type="primary",
-                        key="load_option_chain_bias_metrics",
-                        help="Load option chain data for PCR and ATM bias analysis"):
-                with st.spinner("📊 Loading option chain data for all instruments..."):
+            if st.button("🔄 Reload Option Chain Data (PCR & ATM Metrics)",
+                        type="secondary",
+                        key="reload_option_chain_bias_metrics",
+                        help="Manually reload option chain data for PCR and ATM bias analysis"):
+                with st.spinner("📊 Reloading option chain data for all instruments..."):
                     try:
                         success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True)
                         if success_oc:
-                            st.success("✅ Option chain data loaded successfully!")
+                            st.success("✅ Option chain data reloaded successfully!")
                             st.rerun()
                         else:
-                            st.error(f"❌ Failed to load option chain data: {', '.join(errors_oc)}")
+                            st.error(f"❌ Failed to reload option chain data: {', '.join(errors_oc)}")
                     except Exception as e:
-                        st.error(f"❌ Error loading option chain data: {str(e)}")
+                        st.error(f"❌ Error reloading option chain data: {str(e)}")
         else:
-            # Market is open - auto-load silently
+            # Market is open - auto-reload silently if data is missing
             if option_data_missing or atm_data_missing:
                 try:
                     with st.spinner("🔄 Auto-loading option chain data..."):
