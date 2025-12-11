@@ -1060,6 +1060,48 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             # Silently handle error - will show info message later
             pass
 
+    # ═══════════════════════════════════════════════════════════════════
+    # SOURCE AGREEMENT VISUALIZATION
+    # ═══════════════════════════════════════════════════════════════════
+
+    st.markdown("### 📊 Source Agreement")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("🟢 Bullish Sources", result['bullish_sources'])
+    with col2:
+        st.metric("🔴 Bearish Sources", result['bearish_sources'])
+    with col3:
+        st.metric("🟡 Neutral Sources", result['neutral_sources'])
+
+    # Progress bar for source distribution
+    total = result['source_count']
+    if total > 0:
+        bullish_pct = (result['bullish_sources'] / total) * 100
+        bearish_pct = (result['bearish_sources'] / total) * 100
+        neutral_pct = (result['neutral_sources'] / total) * 100
+
+        st.markdown(f"""
+        <div style='background: #1e1e1e; border-radius: 10px; padding: 10px; margin: 10px 0;'>
+            <div style='display: flex; height: 30px; border-radius: 5px; overflow: hidden;'>
+                <div style='width: {bullish_pct}%; background: #00ff88; display: flex; align-items: center;
+                            justify-content: center; color: black; font-weight: bold;'>
+                    {bullish_pct:.0f}%
+                </div>
+                <div style='width: {bearish_pct}%; background: #ff4444; display: flex; align-items: center;
+                            justify-content: center; color: white; font-weight: bold;'>
+                    {bearish_pct:.0f}%
+                </div>
+                <div style='width: {neutral_pct}%; background: #ffa500; display: flex; align-items: center;
+                            justify-content: center; color: white; font-weight: bold;'>
+                    {neutral_pct:.0f}%
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("---")
 
     # ═══════════════════════════════════════════════════════════════════
     # SIMPLIFIED INTERPRETATION & ACTION PLAN
