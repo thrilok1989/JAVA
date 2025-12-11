@@ -360,7 +360,7 @@ class BiasAnalysisPro:
         return vidya_smoothed, vidya_bullish, vidya_bearish
 
     def calculate_volume_delta(self, df: pd.DataFrame):
-        """Calculate Volume Delta (down_vol - up_vol) - Seller's Perspective"""
+        """Calculate Volume Delta (up_vol - down_vol) - Buyer's Perspective"""
         if df['Volume'].sum() == 0:
             return 0, False, False
 
@@ -368,9 +368,9 @@ class BiasAnalysisPro:
         up_vol = ((df['Close'] > df['Open']).astype(int) * df['Volume']).sum()
         down_vol = ((df['Close'] < df['Open']).astype(int) * df['Volume']).sum()
 
-        volume_delta = down_vol - up_vol
-        volume_bullish = volume_delta < 0
-        volume_bearish = volume_delta > 0
+        volume_delta = up_vol - down_vol
+        volume_bullish = volume_delta > 0
+        volume_bearish = volume_delta < 0
 
         return volume_delta, volume_bullish, volume_bearish
 
