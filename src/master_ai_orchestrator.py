@@ -98,7 +98,10 @@ class MasterAIOrchestrator:
         instrument: str = "NIFTY",
         days_to_expiry: int = 5,
         historical_trades: Optional[pd.DataFrame] = None,
-        trade_params: Optional[Dict] = None
+        trade_params: Optional[Dict] = None,
+        option_screener_data: Optional[Dict] = None,
+        bias_results: Optional[Dict] = None,
+        sentiment_score: float = 0.0
     ) -> MasterAnalysisResult:
         """
         Complete market analysis combining ALL modules
@@ -112,6 +115,9 @@ class MasterAIOrchestrator:
             days_to_expiry: Days until expiry
             historical_trades: Past trade history for expectancy
             trade_params: Dict with entry, stop, target prices
+            option_screener_data: Option screener analysis data (momentum, gamma, etc.)
+            bias_results: Technical bias analysis data (13 indicators from bias_analysis.py)
+            sentiment_score: Overall market sentiment score from AI news analysis
 
         Returns:
             MasterAnalysisResult with complete analysis and recommendation
@@ -207,7 +213,7 @@ class MasterAIOrchestrator:
         print("🤖 Running XGBoost ML Analysis...")
         xgboost_result = self.xgboost_analyzer.analyze_complete_market(
             df=df,
-            bias_results=None,  # TODO: Pass bias results if available
+            bias_results=bias_results,
             option_chain=option_chain,
             volatility_result=volatility_result,
             oi_trap_result=oi_trap_result,
@@ -215,7 +221,8 @@ class MasterAIOrchestrator:
             participant_result=participant_result,
             liquidity_result=liquidity_result,
             ml_regime_result=ml_regime_result,
-            sentiment_score=0.0  # TODO: Pass sentiment score if available
+            sentiment_score=sentiment_score,
+            option_screener_data=option_screener_data
         )
         reasoning.append(f"XGBoost ML: {xgboost_result.prediction} ({xgboost_result.confidence:.0f}% conf)")
 

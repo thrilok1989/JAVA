@@ -88,7 +88,8 @@ class XGBoostMLAnalyzer:
         participant_result: Optional[any] = None,
         liquidity_result: Optional[any] = None,
         ml_regime_result: Optional[any] = None,
-        sentiment_score: float = 0.0
+        sentiment_score: float = 0.0,
+        option_screener_data: Optional[Dict] = None
     ) -> pd.DataFrame:
         """
         Extract ALL features from ALL modules into a single feature vector
@@ -230,6 +231,26 @@ class XGBoostMLAnalyzer:
 
         # ========== SENTIMENT FEATURES ==========
         features['overall_sentiment'] = sentiment_score
+
+        # ========== OPTION SCREENER FEATURES ==========
+        if option_screener_data:
+            features['momentum_burst'] = option_screener_data.get('momentum_burst', 0)
+            features['orderbook_pressure'] = option_screener_data.get('orderbook_pressure', 0)
+            features['gamma_cluster_concentration'] = option_screener_data.get('gamma_cluster', 0)
+            features['oi_acceleration'] = option_screener_data.get('oi_acceleration', 0)
+            features['expiry_spike_detected'] = 1 if option_screener_data.get('expiry_spike', False) else 0
+            features['net_vega_exposure'] = option_screener_data.get('net_vega_exposure', 0)
+            features['skew_ratio'] = option_screener_data.get('skew_ratio', 0)
+            features['atm_vol_premium'] = option_screener_data.get('atm_vol_premium', 0)
+        else:
+            features['momentum_burst'] = 0
+            features['orderbook_pressure'] = 0
+            features['gamma_cluster_concentration'] = 0
+            features['oi_acceleration'] = 0
+            features['expiry_spike_detected'] = 0
+            features['net_vega_exposure'] = 0
+            features['skew_ratio'] = 0
+            features['atm_vol_premium'] = 0
 
         # Convert to DataFrame
         feature_df = pd.DataFrame([features])
@@ -406,7 +427,8 @@ class XGBoostMLAnalyzer:
         participant_result: Optional[any] = None,
         liquidity_result: Optional[any] = None,
         ml_regime_result: Optional[any] = None,
-        sentiment_score: float = 0.0
+        sentiment_score: float = 0.0,
+        option_screener_data: Optional[Dict] = None
     ) -> MLPredictionResult:
         """
         Complete XGBoost ML analysis of ALL market data
@@ -427,7 +449,8 @@ class XGBoostMLAnalyzer:
             participant_result=participant_result,
             liquidity_result=liquidity_result,
             ml_regime_result=ml_regime_result,
-            sentiment_score=sentiment_score
+            sentiment_score=sentiment_score,
+            option_screener_data=option_screener_data
         )
 
         # Make prediction

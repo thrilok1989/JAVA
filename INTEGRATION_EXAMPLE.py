@@ -51,6 +51,35 @@ def example_basic_analysis():
     india_vix = 15.5  # Current VIX
     vix_history = pd.Series([...])  # Historical VIX
 
+    # Technical bias data (from bias_analysis.py - 13 indicators)
+    bias_data = {
+        'volume_delta': 0.65,
+        'hvp': 0.72,
+        'vob': 0.58,
+        'order_blocks': 0.68,
+        'rsi': 0.45,
+        'dmi': 0.71,
+        'vidya': 0.63,
+        'mfi': 0.55,
+        'vwap': 0.69,
+        'atr': 0.48,
+        'ema': 0.67,
+        'obv': 0.61,
+        'force_index': 0.59
+    }
+
+    # Option screener data (from nifty_option_screener_v6.py)
+    screener_data = {
+        'momentum_burst': 0.78,
+        'orderbook_pressure': 0.82,
+        'gamma_cluster': 0.65,
+        'oi_acceleration': 0.71,
+        'expiry_spike': True,
+        'net_vega_exposure': 1250000,
+        'skew_ratio': 1.15,
+        'atm_vol_premium': 0.08
+    }
+
     # Run analysis
     result = orchestrator.analyze_complete_market(
         df=ohlcv_data,
@@ -58,7 +87,10 @@ def example_basic_analysis():
         vix_current=india_vix,
         vix_history=vix_history,
         instrument="NIFTY",
-        days_to_expiry=5
+        days_to_expiry=5,
+        bias_results=bias_data,  # Technical indicators
+        sentiment_score=0.65,  # AI news sentiment (-1 to +1)
+        option_screener_data=screener_data  # Option screener analysis
     )
 
     # Get verdict
@@ -95,6 +127,11 @@ def example_complete_with_trade():
     india_vix = 15.5
     vix_history = pd.Series([...])
 
+    # Technical bias and sentiment
+    bias_data = {...}  # From bias_analysis.py
+    sentiment = 0.65  # From AI news analysis
+    screener_data = {...}  # From option screener
+
     # Your trade setup
     current_price = 22000
     entry_price = 22050
@@ -121,7 +158,10 @@ def example_complete_with_trade():
             'stop': stop_loss,
             'target': target_price,
             'direction': direction
-        }
+        },
+        bias_results=bias_data,
+        sentiment_score=sentiment,
+        option_screener_data=screener_data
     )
 
     # Decision logic
@@ -197,6 +237,9 @@ def streamlit_integration_example():
     # option_chain = fetch_option_chain()
     # vix_current = fetch_vix()
     # vix_history = fetch_vix_history()
+    # bias_data = calculate_bias_analysis(df)  # From bias_analysis.py
+    # sentiment = get_ai_sentiment()  # From AI news engine
+    # screener_data = get_option_screener_data()  # From option screener
 
     # Button to run analysis
     if st.button("🔍 Run Complete Analysis"):
@@ -207,7 +250,10 @@ def streamlit_integration_example():
                 vix_current=vix_current,
                 vix_history=vix_history,
                 instrument="NIFTY",
-                days_to_expiry=5
+                days_to_expiry=5,
+                bias_results=bias_data,
+                sentiment_score=sentiment,
+                option_screener_data=screener_data
             )
 
         # Display verdict prominently
@@ -326,6 +372,9 @@ def example_automated_trading_loop():
         option_chain = fetch_option_chain()
         vix_current = fetch_vix()
         vix_history = fetch_vix_history()
+        bias_data = calculate_bias_analysis(df)
+        sentiment = get_ai_sentiment()
+        screener_data = get_option_screener_data()
 
         # Analyze
         result = orchestrator.analyze_complete_market(
@@ -334,7 +383,10 @@ def example_automated_trading_loop():
             vix_current=vix_current,
             vix_history=vix_history,
             instrument="NIFTY",
-            days_to_expiry=calculate_days_to_expiry()
+            days_to_expiry=calculate_days_to_expiry(),
+            bias_results=bias_data,
+            sentiment_score=sentiment,
+            option_screener_data=screener_data
         )
 
         # Decision logic
