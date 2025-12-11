@@ -50,6 +50,80 @@ def get_ist_datetime_str():
     return get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
 
 # -----------------------
+#  GREEKS CALCULATION
+# -----------------------
+def compute_greeks(spot, strike, tau, risk_free_rate, ltp, option_type):
+    """
+    Calculate option Greeks using Black-Scholes model
+
+    Args:
+        spot: Current spot price
+        strike: Strike price
+        tau: Time to expiry in years
+        risk_free_rate: Risk-free interest rate
+        ltp: Last traded price (premium)
+        option_type: "CE" for Call or "PE" for Put
+
+    Returns:
+        dict with delta, gamma, theta, vega
+    """
+    try:
+        if tau <= 0 or ltp <= 0 or spot <= 0 or strike <= 0:
+            return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+
+        # Calculate implied volatility (simplified - using approximation)
+        # In production, use Newton-Raphson to solve for IV
+        # For now, using a rough estimate based on ATM volatility
+        iv = 0.20  # Default 20% volatility
+
+        # Try to estimate IV from premium
+        if option_type == "CE":
+            intrinsic = max(0, spot - strike)
+        else:
+            intrinsic = max(0, strike - spot)
+
+        time_value = ltp - intrinsic
+        if time_value > 0 and tau > 0:
+            # Rough IV estimate
+            iv = min(2.0, max(0.05, time_value / (spot * sqrt(tau))))
+
+        # Black-Scholes calculations
+        d1 = (log(spot / strike) + (risk_free_rate + 0.5 * iv ** 2) * tau) / (iv * sqrt(tau))
+        d2 = d1 - iv * sqrt(tau)
+
+        # Delta
+        if option_type == "CE":
+            delta = norm.cdf(d1)
+        else:
+            delta = norm.cdf(d1) - 1
+
+        # Gamma (same for calls and puts)
+        gamma = norm.pdf(d1) / (spot * iv * sqrt(tau))
+
+        # Theta
+        if option_type == "CE":
+            theta = (-(spot * norm.pdf(d1) * iv) / (2 * sqrt(tau)) -
+                     risk_free_rate * strike * np.exp(-risk_free_rate * tau) * norm.cdf(d2))
+        else:
+            theta = (-(spot * norm.pdf(d1) * iv) / (2 * sqrt(tau)) +
+                     risk_free_rate * strike * np.exp(-risk_free_rate * tau) * norm.cdf(-d2))
+
+        # Vega (same for calls and puts)
+        vega = spot * norm.pdf(d1) * sqrt(tau)
+
+        # Convert to per-day theta
+        theta_per_day = theta / 365
+
+        return {
+            "delta": round(delta, 4),
+            "gamma": round(gamma, 6),
+            "theta": round(theta_per_day, 4),
+            "vega": round(vega / 100, 4)  # Vega per 1% change in IV
+        }
+    except Exception as e:
+        return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+
+# -----------------------
 #  CONFIG
 # -----------------------
 AUTO_REFRESH_SEC = 60
