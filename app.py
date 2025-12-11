@@ -3157,6 +3157,8 @@ with tab7:
 
                 # Create tabs for each indicator category
                 indicator_tabs = []
+                # Always show Market Regime tab
+                indicator_tabs.append("🎯 Market Regime")
                 if show_vob:
                     indicator_tabs.append("📦 Volume Order Blocks")
                 if show_htf_sr:
@@ -3175,6 +3177,161 @@ with tab7:
                 if indicator_tabs:
                     tabs = st.tabs(indicator_tabs)
                     tab_idx = 0
+
+                    # Market Regime Dashboard (Always first tab)
+                    with tabs[tab_idx]:
+                        from ml.market_regime_detector import MarketRegimeDetector
+
+                        st.markdown("### 🎯 Market Regime Analysis")
+                        st.caption("AI-powered market regime detection using all indicators")
+
+                        # Collect indicator data
+                        regime_indicator_data = {}
+
+                        # BOS data
+                        if show_bos:
+                            from indicators.advanced_price_action import AdvancedPriceAction
+                            pa_indicator = AdvancedPriceAction()
+                            regime_indicator_data['bos'] = pa_indicator.detect_bos(df_stats)
+                            regime_indicator_data['choch'] = pa_indicator.detect_choch(df_stats)
+                        else:
+                            regime_indicator_data['bos'] = []
+                            regime_indicator_data['choch'] = []
+
+                        # HTF SR data
+                        if show_htf_sr and htf_params:
+                            from indicators.htf_support_resistance import HTFSupportResistance
+                            htf_levels_for_regime = []
+                            for level_config in htf_params.get('levels_config', []):
+                                htf_indicator = HTFSupportResistance(
+                                    timeframes=[level_config['timeframe']],
+                                    pivot_length=level_config['length']
+                                )
+                                levels = htf_indicator.calculate_levels(df_stats)
+                                htf_levels_for_regime.extend(levels)
+                            regime_indicator_data['htf_sr'] = htf_levels_for_regime
+                        else:
+                            regime_indicator_data['htf_sr'] = []
+
+                        # Order Blocks data
+                        if show_vob:
+                            from indicators.volume_order_blocks import VolumeOrderBlocks
+                            vob_for_regime = VolumeOrderBlocks(**vob_params) if vob_params else VolumeOrderBlocks()
+                            regime_indicator_data['order_blocks'] = vob_for_regime.calculate(df_stats)
+
+                        # RSI data
+                        if show_rsi:
+                            from indicators.ultimate_rsi import UltimateRSI
+                            rsi_for_regime = UltimateRSI(**rsi_params) if rsi_params else UltimateRSI()
+                            regime_indicator_data['rsi'] = rsi_for_regime.get_signals(df_stats)
+
+                        # Detect regime
+                        regime_detector = MarketRegimeDetector()
+                        regime_result = regime_detector.detect_regime(df_stats, regime_indicator_data)
+
+                        # Display regime info
+                        col1, col2, col3 = st.columns(3)
+
+                        with col1:
+                            regime = regime_result['regime']
+                            regime_emoji = {
+                                'STRONG_UPTREND': '🚀',
+                                'WEAK_UPTREND': '📈',
+                                'RANGING': '↔️',
+                                'WEAK_DOWNTREND': '📉',
+                                'STRONG_DOWNTREND': '💥',
+                                'REVERSAL_TO_UPTREND': '🔄📈',
+                                'REVERSAL_TO_DOWNTREND': '🔄📉',
+                                'UNCERTAIN': '❓'
+                            }
+                            st.metric(
+                                "Current Regime",
+                                f"{regime_emoji.get(regime, '🎯')} {regime.replace('_', ' ').title()}",
+                                delta=None
+                            )
+
+                        with col2:
+                            confidence_pct = regime_result['confidence'] * 100
+                            confidence_color = '🟢' if confidence_pct > 70 else '🟡' if confidence_pct > 50 else '🔴'
+                            st.metric(
+                                "Confidence",
+                                f"{confidence_color} {confidence_pct:.1f}%",
+                                delta=None
+                            )
+
+                        with col3:
+                            volatility = regime_result['volatility']
+                            vol_emoji = {'HIGH_VOLATILITY': '⚡', 'NORMAL_VOLATILITY': '📊', 'LOW_VOLATILITY': '💤'}
+                            st.metric(
+                                "Volatility",
+                                f"{vol_emoji.get(volatility, '📊')} {volatility.replace('_', ' ').title()}",
+                                delta=None
+                            )
+
+                        st.divider()
+
+                        # Regime Details
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.markdown("#### 📊 Regime Indicators")
+                            trend_dir = regime_result['trend_direction']
+                            trend_strength = regime_result['trend_strength']
+
+                            indicator_data = []
+                            indicator_data.append({
+                                'Indicator': 'Trend Direction',
+                                'Value': f"{'🟢' if trend_dir == 'BULLISH' else '🔴' if trend_dir == 'BEARISH' else '⚪'} {trend_dir}"
+                            })
+                            indicator_data.append({
+                                'Indicator': 'Trend Strength',
+                                'Value': f"{trend_strength:.1%}"
+                            })
+                            indicator_data.append({
+                                'Indicator': 'Ranging Market',
+                                'Value': '✅ Yes' if regime_result['is_ranging'] else '❌ No'
+                            })
+                            indicator_data.append({
+                                'Indicator': 'Reversal Signal',
+                                'Value': '⚠️ Detected' if regime_result['reversal_signal'] else '✅ None'
+                            })
+
+                            st.dataframe(pd.DataFrame(indicator_data), use_container_width=True, hide_index=True)
+
+                        with col2:
+                            st.markdown("#### 💡 Trading Recommendations")
+                            recs = regime_result['recommendations']
+
+                            rec_data = []
+                            rec_data.append({
+                                'Recommendation': 'Position Bias',
+                                'Value': recs['position_bias']
+                            })
+                            rec_data.append({
+                                'Recommendation': 'Strategy',
+                                'Value': recs['strategy'].replace('_', ' ').title()
+                            })
+                            rec_data.append({
+                                'Recommendation': 'Position Size',
+                                'Value': f"{recs['position_size_multiplier']:.1f}x"
+                            })
+                            rec_data.append({
+                                'Recommendation': 'Stop Loss Width',
+                                'Value': f"{recs['stop_loss_multiplier']:.1f}x"
+                            })
+
+                            st.dataframe(pd.DataFrame(rec_data), use_container_width=True, hide_index=True)
+
+                        # Allowed Setups
+                        st.markdown("#### ✅ Recommended Trade Setups")
+                        allowed_setups = recs['allowed_setups']
+                        if allowed_setups:
+                            for setup in allowed_setups:
+                                st.markdown(f"• {setup}")
+                        else:
+                            st.info("No specific setups recommended in current regime")
+
+                    tab_idx += 1
 
                     # Volume Order Blocks Data
                     if show_vob:
