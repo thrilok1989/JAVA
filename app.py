@@ -3565,6 +3565,31 @@ with tab9:
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab10:
+    # Add button to open in new tab
+    st.markdown("""
+    <div style="background-color: #1f77b4; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+        <h3 style="color: white; margin: 0 0 10px 0;">🚀 Open AI Analysis in New Browser Tab</h3>
+        <p style="color: white; margin: 0 0 10px 0;">Get a dedicated full-screen view of all AI analysis modules</p>
+        <a href="/🤖_AI_Analysis" target="_blank" style="text-decoration: none;">
+            <button style="
+                background-color: #4CAF50;
+                color: white;
+                padding: 12px 30px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: bold;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            ">
+                🪟 Open in New Tab
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
     try:
         # Prepare data from session state
         if 'data_df' in st.session_state and st.session_state.data_df is not None:
@@ -3635,6 +3660,31 @@ with tab10:
 # ═══════════════════════════════════════════════════════════════════════
 
 with tab11:
+    # Add button to open in new tab
+    st.markdown("""
+    <div style="background-color: #9c27b0; padding: 15px; border-radius: 10px; margin-bottom: 20px; text-align: center;">
+        <h3 style="color: white; margin: 0 0 10px 0;">🚀 Open Advanced Analytics in New Browser Tab</h3>
+        <p style="color: white; margin: 0 0 10px 0;">Explore individual AI modules in a dedicated full-screen view</p>
+        <a href="/🤖_AI_Analysis" target="_blank" style="text-decoration: none;">
+            <button style="
+                background-color: #4CAF50;
+                color: white;
+                padding: 12px 30px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-size: 16px;
+                font-weight: bold;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            ">
+                🪟 Open in New Tab
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
     try:
         if 'data_df' in st.session_state and st.session_state.data_df is not None:
             df = st.session_state.data_df
