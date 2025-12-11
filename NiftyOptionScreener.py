@@ -4115,6 +4115,19 @@ def render_nifty_option_screener():
     # Calculate Overall Bias from all analyses
     overall_bias = calculate_overall_bias(atm_bias, support_bias, resistance_bias, seller_bias_result)
 
+    # Store all market sentiment data in session state for access from Overall Market Sentiment tab
+    st.session_state.nifty_option_screener_data = {
+        'overall_bias': overall_bias,
+        'atm_bias': atm_bias,
+        'seller_max_pain': seller_max_pain,
+        'total_gex_net': total_gex_net,
+        'expiry_spike_data': expiry_spike_data,
+        'oi_pcr_metrics': oi_pcr_metrics,
+        'strike_analyses': strike_analyses,
+        'sector_rotation_data': sector_rotation_data,
+        'last_updated': datetime.now()
+    }
+
     # Display the reorganized Overall Market Sentiment Summary Dashboard
     display_overall_market_sentiment_summary(
         overall_bias=overall_bias,
