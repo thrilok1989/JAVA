@@ -1804,7 +1804,12 @@ def detect_expiry_spikes(merged_df, spot, atm_strike, days_to_expiry, expiry_dat
             "message": "Expiry >5 days away, spike detection not active",
             "type": None,
             "key_levels": [],
-            "score": 0
+            "score": 0,
+            "color": "#00ff00",  # Green color for no spike
+            "intensity": "NO SPIKE DETECTED",
+            "factors": [],
+            "days_to_expiry": days_to_expiry,
+            "expiry_date": expiry_date_str
         }
     
     spike_score = 0
@@ -3565,6 +3570,154 @@ def parse_dhan_option_chain(chain_data):
             }
             pe_rows.append(pi)
     return pd.DataFrame(ce_rows), pd.DataFrame(pe_rows)
+
+# -----------------------
+#  HELPER FUNCTION FOR AUTO-LOADING DATA
+# -----------------------
+
+def load_option_screener_data_silently():
+    """
+    Loads option screener data without rendering UI
+    Stores data in st.session_state.nifty_option_screener_data
+    Returns True on success, False on failure
+    """
+    try:
+        # Fetch spot price
+        spot = get_nifty_spot_price()
+        if spot == 0.0:
+            return False
+
+        # Get expiries
+        expiries = get_expiry_list()
+        if not expiries:
+            return False
+
+        # Use first expiry
+        expiry = expiries[0]
+
+        # Calculate days to expiry
+        try:
+            expiry_dt = datetime.strptime(expiry, "%Y-%m-%d").replace(hour=15, minute=30)
+            now = datetime.now()
+            tau = max((expiry_dt - now).total_seconds() / (365.25*24*3600), 1/365.25)
+            days_to_expiry = (expiry_dt - now).total_seconds() / (24 * 3600)
+        except Exception:
+            tau = 7.0/365.0
+            days_to_expiry = 7.0
+
+        # Fetch option chain
+        chain = fetch_dhan_option_chain(expiry)
+        if chain is None:
+            return False
+
+        df_ce, df_pe = parse_dhan_option_chain(chain)
+        if df_ce.empty or df_pe.empty:
+            return False
+
+        # Filter ATM window
+        strike_gap = strike_gap_from_series(df_ce["strikePrice"])
+        atm_strike = min(df_ce["strikePrice"].tolist(), key=lambda x: abs(x - spot))
+        lower = atm_strike - (ATM_STRIKE_WINDOW * strike_gap)
+        upper = atm_strike + (ATM_STRIKE_WINDOW * strike_gap)
+
+        df_ce = df_ce[(df_ce["strikePrice"]>=lower) & (df_ce["strikePrice"]<=upper)].reset_index(drop=True)
+        df_pe = df_pe[(df_pe["strikePrice"]>=lower) & (df_pe["strikePrice"]<=upper)].reset_index(drop=True)
+
+        merged = pd.merge(df_ce, df_pe, on="strikePrice", how="outer").sort_values("strikePrice").reset_index(drop=True)
+        merged["strikePrice"] = merged["strikePrice"].astype(int)
+
+        # Initialize session state if needed
+        if "prev_ltps_seller" not in st.session_state:
+            st.session_state["prev_ltps_seller"] = {}
+        if "prev_ivs_seller" not in st.session_state:
+            st.session_state["prev_ivs_seller"] = {}
+
+        # Initialize moment history
+        _init_history()
+
+        # Compute per-strike metrics with SELLER interpretation
+        for i, row in merged.iterrows():
+            strike = int(row["strikePrice"])
+            ltp_ce = safe_float(row.get("LTP_CE",0.0))
+            ltp_pe = safe_float(row.get("LTP_PE",0.0))
+            iv_ce = safe_float(row.get("IV_CE", np.nan))
+            iv_pe = safe_float(row.get("IV_PE", np.nan))
+
+            key_ce = f"{expiry}_{strike}_CE"
+            key_pe = f"{expiry}_{strike}_PE"
+            prev_ce = st.session_state["prev_ltps_seller"].get(key_ce, None)
+            prev_pe = st.session_state["prev_ltps_seller"].get(key_pe, None)
+
+            # Compute Greeks
+            greeks_ce = compute_greeks(spot, strike, tau, RISK_FREE_RATE, ltp_ce, "CE")
+            greeks_pe = compute_greeks(spot, strike, tau, RISK_FREE_RATE, ltp_pe, "PE")
+
+            # Determine seller bias
+            oi_ce = safe_int(row.get("OI_CE",0))
+            oi_pe = safe_int(row.get("OI_PE",0))
+            chg_oi_ce = safe_int(row.get("Chg_OI_CE",0))
+            chg_oi_pe = safe_int(row.get("Chg_OI_PE",0))
+
+            seller_bias_ce = seller_bias_direction(chg_oi_ce, prev_ce, ltp_ce, oi_ce, "CE")
+            seller_bias_pe = seller_bias_direction(chg_oi_pe, prev_pe, ltp_pe, oi_pe, "PE")
+
+            # Update merged dataframe
+            merged.at[i,"Delta_CE"] = greeks_ce["delta"]
+            merged.at[i,"Gamma_CE"] = greeks_ce["gamma"]
+            merged.at[i,"Theta_CE"] = greeks_ce["theta"]
+            merged.at[i,"Vega_CE"] = greeks_ce["vega"]
+            merged.at[i,"Seller_Bias_CE"] = seller_bias_ce
+            merged.at[i,"Delta_PE"] = greeks_pe["delta"]
+            merged.at[i,"Gamma_PE"] = greeks_pe["gamma"]
+            merged.at[i,"Theta_PE"] = greeks_pe["theta"]
+            merged.at[i,"Vega_PE"] = greeks_pe["vega"]
+            merged.at[i,"Seller_Bias_PE"] = seller_bias_pe
+
+            st.session_state["prev_ltps_seller"][key_ce] = ltp_ce
+            st.session_state["prev_ltps_seller"][key_pe] = ltp_pe
+            if not np.isnan(iv_ce):
+                st.session_state["prev_ivs_seller"][key_ce] = iv_ce
+            if not np.isnan(iv_pe):
+                st.session_state["prev_ivs_seller"][key_pe] = iv_pe
+
+        # Calculate all analyses
+        atm_bias = analyze_atm_bias_12_metrics(merged, spot, atm_strike, strike_gap, tau)
+        support_bias = analyze_support_bias(merged, spot, atm_strike, strike_gap)
+        resistance_bias = analyze_resistance_bias(merged, spot, atm_strike, strike_gap)
+        seller_bias_result = calculate_seller_bias_score(merged)
+        seller_max_pain = calculate_seller_max_pain(merged)
+        total_gex_net = calculate_total_gex(merged, spot)
+        oi_pcr_metrics = calculate_oi_pcr_metrics(merged, spot, atm_strike, strike_gap)
+        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+        expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
+
+        # Get sector rotation data if available
+        sector_rotation_data = None
+        if 'enhanced_market_data' in st.session_state:
+            enhanced_data = st.session_state.enhanced_market_data
+            if 'sector_rotation' in enhanced_data:
+                sector_rotation_data = enhanced_data['sector_rotation']
+
+        # Calculate overall bias
+        overall_bias = calculate_overall_bias(atm_bias, support_bias, resistance_bias, seller_bias_result)
+
+        # Store all data in session state
+        st.session_state.nifty_option_screener_data = {
+            'overall_bias': overall_bias,
+            'atm_bias': atm_bias,
+            'seller_max_pain': seller_max_pain,
+            'total_gex_net': total_gex_net,
+            'expiry_spike_data': expiry_spike_data,
+            'oi_pcr_metrics': oi_pcr_metrics,
+            'strike_analyses': strike_analyses,
+            'sector_rotation_data': sector_rotation_data,
+            'last_updated': datetime.now()
+        }
+
+        return True
+    except Exception as e:
+        # Silently fail - don't show errors
+        return False
 
 # -----------------------
 #  MAIN APP - COMPLETE V7 WITH ATM BIAS ANALYZER

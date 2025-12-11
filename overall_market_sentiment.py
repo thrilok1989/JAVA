@@ -1340,6 +1340,30 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     st.markdown("---")
 
     # Check if we have option screener data in session state
+    if 'nifty_option_screener_data' not in st.session_state:
+        # Auto-load option screener data
+        st.markdown("### 🎯 NIFTY Option Screener v7.0 - Market Sentiment Summary")
+        with st.spinner("🔄 Auto-loading option chain data..."):
+            try:
+                from NiftyOptionScreener import load_option_screener_data_silently
+                success = load_option_screener_data_silently()
+                if success:
+                    st.success("✅ Option chain data loaded successfully!")
+                    st.rerun()
+                else:
+                    st.warning("""
+                    ⚠️ **Unable to load option chain data automatically**
+
+                    Please navigate to the **"🎯 NIFTY Option Screener v7.0"** tab to load the data manually.
+                    """)
+            except Exception as e:
+                st.error(f"❌ Error loading option chain data: {e}")
+                st.warning("""
+                ⚠️ **Option Chain Data Not Yet Loaded**
+
+                Please navigate to the **"🎯 NIFTY Option Screener v7.0"** tab to load the data.
+                """)
+
     if 'nifty_option_screener_data' in st.session_state and display_overall_market_sentiment_summary is not None:
         option_data = st.session_state.nifty_option_screener_data
 
@@ -1361,29 +1385,6 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             st.caption(f"📅 Option chain data last updated: {last_updated.strftime('%Y-%m-%d %H:%M:%S IST')}")
 
         st.info("💡 For more detailed analysis, visit the **NIFTY Option Screener v7.0** tab")
-    else:
-        # Show message if data not available
-        st.markdown("### 🎯 NIFTY Option Screener v7.0 - Market Sentiment Summary")
-        st.warning("""
-        ⚠️ **Option Chain Data Not Yet Loaded**
-
-        The comprehensive market sentiment summary from the NIFTY Option Screener v7.0 will appear here once loaded.
-
-        **To load the data:**
-        - Navigate to the **"🎯 NIFTY Option Screener v7.0"** tab
-        - The option chain will be fetched automatically
-        - Return to this tab to see the complete market sentiment dashboard
-
-        **What you'll see here:**
-        - 🎯 Overall Market Bias (ATM ±2, Support, Resistance, Seller Bias)
-        - 💰 Max Pain Analysis (Seller's Perspective)
-        - ⚡ GEX (Gamma Exposure) Analysis
-        - 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation
-        - 📊 PUT-CALL RATIO (PCR) Analysis
-        - 🎯 ATM Overall Bias Summary
-        - 🔄 Sector Rotation Analysis
-        - 📅 Expiry Spike Probability
-        """)
 
     # ─────────────────────────────────────────────────────────────────
     # 5. PERPLEXITY AI MARKET INSIGHTS (REAL-TIME WEB RESEARCH)
