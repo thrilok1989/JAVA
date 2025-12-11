@@ -558,7 +558,7 @@ def analyze_atm_bias(merged_df, spot, atm_strike, strike_gap):
     
     return {
         "instrument": "NIFTY",
-        "strike": atm_strike,
+        "atm_strike": atm_strike,
         "zone": "ATM",
         "level": "ATM Cluster",
         "bias_scores": bias_scores,
@@ -751,7 +751,7 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
                     {atm_bias["verdict"]}
                 </div>
                 <div style='font-size: 1.2rem; color:#ffcc00; text-align:center;'>
-                    ₹{atm_bias["strike"]:,}
+                    ₹{atm_bias["atm_strike"]:,}
                 </div>
                 <div style='font-size: 0.9rem; color:#cccccc; text-align:center; margin-top:10px;'>
                     Score: {atm_bias["total_score"]:.2f}
@@ -3897,7 +3897,7 @@ def load_option_screener_data_silently():
                 st.session_state["prev_ivs_seller"][key_pe] = iv_pe
 
         # Calculate all analyses
-        atm_bias = analyze_atm_bias_12_metrics(merged, spot, atm_strike, strike_gap, tau)
+        atm_bias = analyze_atm_bias(merged, spot, atm_strike, strike_gap)
         support_bias = analyze_support_bias(merged, spot, atm_strike, strike_gap)
         resistance_bias = analyze_resistance_bias(merged, spot, atm_strike, strike_gap)
         seller_bias_result = calculate_seller_bias_score(merged)
@@ -5957,7 +5957,7 @@ def render_nifty_option_screener():
             col_atm1, col_atm2, col_atm3 = st.columns(3)
             
             with col_atm1:
-                st.metric("ATM Strike", f"₹{atm_bias['strike']:,}")
+                st.metric("ATM Strike", f"₹{atm_bias['atm_strike']:,}")
                 st.metric("CALL OI", f"{atm_bias['metrics']['ce_oi']:,}")
                 st.metric("PUT OI", f"{atm_bias['metrics']['pe_oi']:,}")
             
