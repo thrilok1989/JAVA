@@ -1410,7 +1410,7 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
         with regime_col1:
             confidence = regime_data.get('confidence', 0)
             st.markdown(f"""
-            <div style="
+            <div id="ml-regime-card" style="
                 background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                 padding: 20px;
                 border-radius: 12px;
@@ -1434,7 +1434,7 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
             trend_strength = regime_data.get('trend_strength', 0)
             trend_color = "#00ff88" if trend_strength > 60 else ("#ffa500" if trend_strength > 40 else "#ff4444")
             st.markdown(f"""
-            <div style="
+            <div id="ml-trend-strength-card" style="
                 background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                 padding: 20px;
                 border-radius: 12px;
@@ -1461,7 +1461,7 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
             }
             vol_color = vol_color_map.get(vol_state, '#888888')
             st.markdown(f"""
-            <div style="
+            <div id="ml-volatility-card" style="
                 background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                 padding: 20px;
                 border-radius: 12px;
@@ -1482,7 +1482,7 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
             strategy = regime_data.get('recommended_strategy', 'N/A')
             timeframe = regime_data.get('optimal_timeframe', 'N/A')
             st.markdown(f"""
-            <div style="
+            <div id="ml-strategy-card" style="
                 background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
                 padding: 20px;
                 border-radius: 12px;
