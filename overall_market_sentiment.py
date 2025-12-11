@@ -16,6 +16,7 @@ import pandas as pd
 from datetime import datetime
 import time
 import asyncio
+import os
 from market_hours_scheduler import is_within_trading_hours, scheduler
 from ai_analysis_adapter import run_ai_analysis, shutdown_ai_engine
 from perplexity_market_insights import render_market_insights_widget
