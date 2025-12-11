@@ -163,7 +163,7 @@ All 13 technical indicators:
 ---
 
 ### 1️⃣1️⃣ **Tab 8: NIFTY Option Screener v7.0** (8 features)
-**Source**: `option_screener_data` parameter from `nifty_option_screener_v6.py`
+**Source**: `option_screener_data` parameter from `NiftyOptionScreener.py`
 
 | Feature | Description | What It Detects |
 |---------|-------------|-----------------|

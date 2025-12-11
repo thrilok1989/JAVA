@@ -38,7 +38,7 @@ ACCESS_TOKEN = "your_actual_access_token_here"
 After adding your credentials, test the setup:
 
 ```bash
-streamlit run nifty_option_screener_v6.py
+streamlit run app.py
 ```
 
 If configured correctly, you should see:
@@ -152,7 +152,7 @@ pip install -r requirements.txt
 
 Once configured:
 
-1. ✅ Run the screener: `streamlit run nifty_option_screener_v6.py`
+1. ✅ Run the app: `streamlit run app.py`
 2. ✅ Verify data is loading correctly
 3. ✅ Test optional features (Telegram, AI) if configured
 4. ✅ Review the [QUICKSTART.md](QUICKSTART.md) for usage guide

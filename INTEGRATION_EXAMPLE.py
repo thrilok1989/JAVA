@@ -68,7 +68,7 @@ def example_basic_analysis():
         'force_index': 0.59
     }
 
-    # Option screener data (from nifty_option_screener_v6.py)
+    # Option screener data (from NiftyOptionScreener.py)
     screener_data = {
         'momentum_burst': 0.78,
         'orderbook_pressure': 0.82,
