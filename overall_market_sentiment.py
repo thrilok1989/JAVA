@@ -3,12 +3,14 @@ Overall Market Sentiment Analysis
 
 Aggregates bias data from all sources to provide a comprehensive market sentiment view
 
-Data Sources:
-1. Stock Performance (Market Breadth)
-2. Technical Indicators (Bias Analysis Pro - 13 indicators matching Pine Script)
-3. AI Market Analysis (Enhanced with news, global data, and reasoning)
+Data Sources (from Tab 0 - Overall Market Sentiment Dashboard):
+1. Stock Performance (Market Breadth) - Weight: 2.0
+2. Technical Indicators (Bias Analysis Pro - 13 indicators) - Weight: 3.0
+3. ATM Strike Verdict (ATM ±2 Strikes - 12 Bias Metrics) - Weight: 3.5
+4. PCR/OI Analysis (Put-Call Ratio Sentiment) - Weight: 2.5
+5. Sector Rotation Analysis (Sector Rotation Bias) - Weight: 3.0
 
-Note: Option chain analysis is now handled separately by NiftyOptionScreener.py
+Note: All option chain data comes from NiftyOptionScreener.py displayed on Tab 0
 """
 
 import streamlit as st
@@ -157,122 +159,152 @@ def calculate_technical_indicators_sentiment(bias_results):
     }
 
 
-def calculate_option_chain_pcr_sentiment(NSE_INSTRUMENTS):
+def calculate_atm_strike_verdict_sentiment():
     """
-    Calculate sentiment from PCR (Put-Call Ratio) analysis
+    Calculate sentiment from ATM Strike Verdict (from Option Screener Tab 0)
+    Uses the atm_bias data displayed on Overall Market Sentiment dashboard
     Returns: dict with sentiment, score, and details
     """
-    if 'overall_option_data' not in st.session_state or not st.session_state.overall_option_data:
+    if 'nifty_option_screener_data' not in st.session_state:
         return None
 
-    option_data = st.session_state.overall_option_data
+    option_data = st.session_state.nifty_option_screener_data
+    atm_bias = option_data.get('atm_bias')
 
-    # Focus on main indices
-    main_indices = ['NIFTY', 'SENSEX']
+    if not atm_bias:
+        return None
 
-    bullish_instruments = 0
-    bearish_instruments = 0
-    neutral_instruments = 0
+    # Extract ATM verdict and score
+    verdict = atm_bias.get('verdict', 'Neutral')
+    strike = atm_bias.get('strike', 0)
+    bias_score = atm_bias.get('score', 0)
 
-    total_score = 0
-    instruments_analyzed = 0
-
-    pcr_details = []
-
-    for instrument in main_indices:
-        if instrument not in option_data:
-            continue
-
-        data = option_data[instrument]
-        if not data.get('success'):
-            continue
-
-        # Calculate PCR for Total OI
-        total_ce_oi = data.get('total_ce_oi', 0)
-        total_pe_oi = data.get('total_pe_oi', 0)
-        pcr_oi = total_pe_oi / total_ce_oi if total_ce_oi > 0 else 1
-
-        # Calculate PCR for Change in OI
-        total_ce_change = data.get('total_ce_change', 0)
-        total_pe_change = data.get('total_pe_change', 0)
-        pcr_change_oi = abs(total_pe_change) / abs(total_ce_change) if abs(total_ce_change) > 0 else 1
-
-        # Determine OI bias
-        if pcr_oi > 1.2:
-            oi_bias = "BULLISH"
-            oi_score = min(50, (pcr_oi - 1) * 50)
-        elif pcr_oi < 0.8:
-            oi_bias = "BEARISH"
-            oi_score = -min(50, (1 - pcr_oi) * 50)
-        else:
-            oi_bias = "NEUTRAL"
-            oi_score = 0
-
-        # Determine Change OI bias
-        if pcr_change_oi > 1.2:
-            change_bias = "BULLISH"
-            change_score = min(50, (pcr_change_oi - 1) * 50)
-        elif pcr_change_oi < 0.8:
-            change_bias = "BEARISH"
-            change_score = -min(50, (1 - pcr_change_oi) * 50)
-        else:
-            change_bias = "NEUTRAL"
-            change_score = 0
-
-        # Combined score for this instrument
-        instrument_score = (oi_score + change_score) / 2
-
-        # Determine overall instrument bias
-        if instrument_score > 10:
-            instrument_bias = "BULLISH"
-            bullish_instruments += 1
-        elif instrument_score < -10:
-            instrument_bias = "BEARISH"
-            bearish_instruments += 1
-        else:
-            instrument_bias = "NEUTRAL"
-            neutral_instruments += 1
-
-        total_score += instrument_score
-        instruments_analyzed += 1
-
-        # Add to details
-        pcr_details.append({
-            'Instrument': instrument,
-            'Spot': f"₹ {data.get('spot', 0):,.2f}",
-            'Total CE OI': f"{total_ce_oi:,}",
-            'Total PE OI': f"{total_pe_oi:,}",
-            'PCR (OI)': f"{pcr_oi:.2f}",
-            'OI Bias': f"{oi_bias} {'⚖️' if oi_bias == 'NEUTRAL' else '🐂' if oi_bias == 'BULLISH' else '🐻'}",
-            'CE Δ OI': f"{total_ce_change:,}",
-            'PE Δ OI': f"{total_pe_change:,}",
-            'PCR (Δ OI)': f"{pcr_change_oi:.2f}",
-            'Δ OI Bias': f"{change_bias} {'⚖️' if change_bias == 'NEUTRAL' else '🐂' if change_bias == 'BULLISH' else '🐻'}"
-        })
-
-    # Calculate overall score
-    overall_score = total_score / instruments_analyzed if instruments_analyzed > 0 else 0
-
-    # Determine overall bias
-    if overall_score > 10:
+    # Determine bias from verdict
+    verdict_upper = str(verdict).upper()
+    if 'STRONG BULLISH' in verdict_upper:
         bias = "BULLISH"
-    elif overall_score < -10:
+        score = 75
+    elif 'BULLISH' in verdict_upper:
+        bias = "BULLISH"
+        score = 40
+    elif 'STRONG BEARISH' in verdict_upper:
         bias = "BEARISH"
+        score = -75
+    elif 'BEARISH' in verdict_upper:
+        bias = "BEARISH"
+        score = -40
     else:
         bias = "NEUTRAL"
+        score = bias_score if abs(bias_score) < 30 else 0
 
-    # Calculate confidence
-    confidence = min(100, abs(overall_score))
+    confidence = min(100, abs(score))
 
     return {
         'bias': bias,
-        'score': overall_score,
-        'bullish_instruments': bullish_instruments,
-        'bearish_instruments': bearish_instruments,
-        'neutral_instruments': neutral_instruments,
-        'total_instruments': instruments_analyzed,
+        'score': score,
         'confidence': confidence,
-        'pcr_details': pcr_details
+        'strike': strike,
+        'verdict': verdict,
+        'details': f"Strike: {strike} | Verdict: {verdict}"
+    }
+
+
+def calculate_pcr_sentiment_from_screener():
+    """
+    Calculate sentiment from PCR/OI analysis (from Option Screener Tab 0)
+    Uses oi_pcr_metrics displayed on Overall Market Sentiment dashboard
+    Returns: dict with sentiment, score, and details
+    """
+    if 'nifty_option_screener_data' not in st.session_state:
+        return None
+
+    option_data = st.session_state.nifty_option_screener_data
+    oi_pcr_metrics = option_data.get('oi_pcr_metrics')
+
+    if not oi_pcr_metrics:
+        return None
+
+    # Extract PCR sentiment
+    pcr_sentiment = oi_pcr_metrics.get('sentiment', 'NEUTRAL')
+    pcr_description = oi_pcr_metrics.get('description', '')
+    pcr_value = oi_pcr_metrics.get('pcr_value', 1.0)
+
+    # Determine bias and score based on PCR sentiment
+    sentiment_upper = str(pcr_sentiment).upper()
+
+    if 'BULLISH' in sentiment_upper:
+        bias = "BULLISH"
+        # Score based on how far PCR is from neutral (1.0)
+        # PCR > 1.2 is bullish
+        score = min(50, (pcr_value - 1.0) * 100) if pcr_value > 1.0 else 25
+    elif 'BEARISH' in sentiment_upper:
+        bias = "BEARISH"
+        # PCR < 0.8 is bearish
+        score = -min(50, (1.0 - pcr_value) * 100) if pcr_value < 1.0 else -25
+    else:
+        bias = "NEUTRAL"
+        score = 0
+
+    confidence = min(100, abs(score))
+
+    return {
+        'bias': bias,
+        'score': score,
+        'confidence': confidence,
+        'pcr_value': pcr_value,
+        'description': pcr_description,
+        'details': f"PCR: {pcr_value:.2f} | {pcr_description}"
+    }
+
+
+def calculate_sector_rotation_sentiment():
+    """
+    Calculate sentiment from Sector Rotation Analysis (from Option Screener Tab 0)
+    Uses sector_rotation_data displayed on Overall Market Sentiment dashboard
+    Returns: dict with sentiment, score, and details
+    """
+    if 'nifty_option_screener_data' not in st.session_state:
+        return None
+
+    option_data = st.session_state.nifty_option_screener_data
+    sector_rotation = option_data.get('sector_rotation_data')
+
+    if not sector_rotation:
+        return None
+
+    # Extract sector rotation bias
+    rotation_bias = sector_rotation.get('bias', 'NEUTRAL')
+    rotation_score = sector_rotation.get('score', 0)
+    rotation_description = sector_rotation.get('description', '')
+
+    # Determine bias from rotation bias
+    bias_upper = str(rotation_bias).upper()
+
+    if 'STRONG BULLISH' in bias_upper:
+        bias = "BULLISH"
+        score = 75
+    elif 'BULLISH' in bias_upper:
+        bias = "BULLISH"
+        score = 40
+    elif 'STRONG BEARISH' in bias_upper:
+        bias = "BEARISH"
+        score = -75
+    elif 'BEARISH' in bias_upper:
+        bias = "BEARISH"
+        score = -40
+    else:
+        bias = "NEUTRAL"
+        score = rotation_score if abs(rotation_score) < 30 else 0
+
+    confidence = min(100, abs(score))
+
+    return {
+        'bias': bias,
+        'score': score,
+        'confidence': confidence,
+        'rotation_bias': rotation_bias,
+        'description': rotation_description,
+        'details': f"{rotation_bias} | {rotation_description}"
     }
 
 
@@ -564,26 +596,20 @@ def calculate_overall_sentiment():
             if tech_sentiment:
                 sentiment_sources['Technical Indicators'] = tech_sentiment
 
-    # 3. PCR Analysis Sentiment
-    pcr_sentiment = calculate_option_chain_pcr_sentiment(None)
-    if pcr_sentiment:
-        sentiment_sources['PCR Analysis'] = pcr_sentiment
+    # 3. ATM Strike Verdict (from Tab 0 - Option Screener)
+    atm_verdict_sentiment = calculate_atm_strike_verdict_sentiment()
+    if atm_verdict_sentiment:
+        sentiment_sources['ATM Strike Verdict'] = atm_verdict_sentiment
 
-    # 4. Option Chain Analysis Sentiment
-    oc_sentiment = calculate_option_chain_atm_sentiment(None)
-    if oc_sentiment and oc_sentiment['total_instruments'] > 0:
-        sentiment_sources['Option Chain Analysis'] = oc_sentiment
+    # 4. PCR Sentiment (from Tab 0 - Option Screener)
+    pcr_screener_sentiment = calculate_pcr_sentiment_from_screener()
+    if pcr_screener_sentiment:
+        sentiment_sources['PCR/OI Analysis'] = pcr_screener_sentiment
 
-    # 5. NIFTY Advanced Metrics Sentiment
-    nifty_advanced_sentiment = calculate_nifty_advanced_metrics_sentiment()
-    if nifty_advanced_sentiment:
-        sentiment_sources['NIFTY Advanced Metrics'] = nifty_advanced_sentiment
-        
-    # 6. AI Market Analysis Sentiment (NEW)
-    if 'ai_market_analysis' in st.session_state:
-        ai_sentiment = calculate_ai_analysis_sentiment(st.session_state.ai_market_analysis)
-        if ai_sentiment:
-            sentiment_sources['🤖 AI Market Analysis'] = ai_sentiment
+    # 5. Sector Rotation (from Tab 0 - Option Screener)
+    sector_rotation_sentiment = calculate_sector_rotation_sentiment()
+    if sector_rotation_sentiment:
+        sentiment_sources['Sector Rotation'] = sector_rotation_sentiment
 
     # If no data available
     if not sentiment_sources:
@@ -603,10 +629,9 @@ def calculate_overall_sentiment():
     source_weights = {
         'Stock Performance': 2.0,
         'Technical Indicators': 3.0,
-        'PCR Analysis': 2.5,
-        'Option Chain Analysis': 2.0,
-        'NIFTY Advanced Metrics': 2.5,
-        '🤖 AI Market Analysis': 4.0  # Highest weight for AI analysis
+        'ATM Strike Verdict': 3.5,      # ATM ±2 strikes analysis
+        'PCR/OI Analysis': 2.5,          # PCR sentiment from Tab 0
+        'Sector Rotation': 3.0           # Sector rotation bias from Tab 0
     }
 
     total_weighted_score = 0
