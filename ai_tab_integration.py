@@ -26,10 +26,16 @@ except ImportError as e:
     st.warning(f"Advanced AI modules not available: {e}")
 
 
-def render_master_ai_analysis_tab(df, option_chain, vix_current, vix_history, instrument="NIFTY", days_to_expiry=5):
+def render_master_ai_analysis_tab(df, option_chain, vix_current, vix_history, instrument="NIFTY", days_to_expiry=5,
+                                  bias_results=None, sentiment_score=0.0, option_screener_data=None):
     """
     Render the Master AI Analysis tab
-    This is the MAIN tab showing complete AI analysis
+    This is the MAIN tab showing complete AI analysis with ALL data sources
+
+    Args:
+        bias_results: Technical bias analysis from Tab 5 (13 indicators)
+        sentiment_score: AI sentiment from news analysis (-1 to +1)
+        option_screener_data: Option screener metrics from Tab 8
     """
     st.header("🤖 MASTER AI ORCHESTRATOR")
     st.markdown("**Institutional-Grade Trading Intelligence**")
@@ -90,7 +96,7 @@ def render_master_ai_analysis_tab(df, option_chain, vix_current, vix_history, in
                 if 'trade_history' in st.session_state and len(st.session_state.trade_history) > 0:
                     historical_trades = st.session_state.trade_history
 
-                # Run complete analysis
+                # Run complete analysis with ALL data sources
                 result = st.session_state.orchestrator.analyze_complete_market(
                     df=df,
                     option_chain=option_chain,
@@ -98,7 +104,10 @@ def render_master_ai_analysis_tab(df, option_chain, vix_current, vix_history, in
                     vix_history=vix_history,
                     instrument=instrument,
                     days_to_expiry=days_to_expiry,
-                    historical_trades=historical_trades
+                    historical_trades=historical_trades,
+                    bias_results=bias_results,
+                    sentiment_score=sentiment_score,
+                    option_screener_data=option_screener_data
                 )
 
                 st.session_state.ai_result = result
@@ -414,10 +423,15 @@ def render_master_ai_analysis_tab(df, option_chain, vix_current, vix_history, in
             )
 
 
-def render_advanced_analytics_tab(df, option_chain, vix_current, vix_history):
+def render_advanced_analytics_tab(df, option_chain, vix_current, vix_history, bias_results=None, sentiment_score=0.0, option_screener_data=None):
     """
     Render individual module analysis tab
     Allows users to explore each AI module separately
+
+    Args:
+        bias_results: Technical bias analysis from Tab 5 (13 indicators)
+        sentiment_score: AI sentiment from news analysis (-1 to +1)
+        option_screener_data: Option screener metrics from Tab 8
     """
     st.header("🔬 Advanced Analytics")
     st.markdown("**Explore Individual AI Modules**")

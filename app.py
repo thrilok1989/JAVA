@@ -3579,14 +3579,30 @@ with tab10:
                 days_ahead = 7
             days_to_expiry = days_ahead
 
-            # Render the AI analysis tab
+            # Extract additional data sources for XGBoost ML
+            # Bias analysis results (13 technical indicators from Tab 5)
+            bias_results = None
+            if 'bias_analysis_results' in st.session_state and st.session_state.bias_analysis_results:
+                if st.session_state.bias_analysis_results.get('success'):
+                    bias_results = st.session_state.bias_analysis_results.get('results', {})
+
+            # AI sentiment score (TODO: implement AI news sentiment engine)
+            sentiment_score = 0.0
+
+            # Option screener data (TODO: extract from Tab 8 when available)
+            option_screener_data = None
+
+            # Render the AI analysis tab with ALL data sources
             render_master_ai_analysis_tab(
                 df=df,
                 option_chain=option_chain,
                 vix_current=vix_current,
                 vix_history=vix_history,
                 instrument=selected_instrument,
-                days_to_expiry=days_to_expiry
+                days_to_expiry=days_to_expiry,
+                bias_results=bias_results,
+                sentiment_score=sentiment_score,
+                option_screener_data=option_screener_data
             )
         else:
             st.warning("⚠️ Please load market data first. Go to 'Overall Market Sentiment' tab and wait for data to load.")
@@ -3635,12 +3651,24 @@ with tab11:
 
             vix_history = pd.Series([vix_current] * 50)
 
-            # Render individual modules
+            # Extract additional data sources for comprehensive analysis
+            bias_results = None
+            if 'bias_analysis_results' in st.session_state and st.session_state.bias_analysis_results:
+                if st.session_state.bias_analysis_results.get('success'):
+                    bias_results = st.session_state.bias_analysis_results.get('results', {})
+
+            sentiment_score = 0.0  # TODO: AI news sentiment
+            option_screener_data = None  # TODO: extract from Tab 8
+
+            # Render individual modules with ALL data sources
             render_advanced_analytics_tab(
                 df=df,
                 option_chain=option_chain,
                 vix_current=vix_current,
-                vix_history=vix_history
+                vix_history=vix_history,
+                bias_results=bias_results,
+                sentiment_score=sentiment_score,
+                option_screener_data=option_screener_data
             )
         else:
             st.warning("⚠️ Please load market data first")
