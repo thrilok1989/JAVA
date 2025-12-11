@@ -20,6 +20,7 @@ from position_sizing_engine import PositionSizingEngine, PositionSizeResult
 from risk_management_ai import RiskManagementAI, RiskManagementResult
 from expectancy_model import ExpectancyCalculator, ExpectancyResult
 from ml_market_regime import MLMarketRegimeDetector, MarketSummary, generate_market_summary, MLMarketRegimeResult
+from xgboost_ml_analyzer import XGBoostMLAnalyzer, MLPredictionResult
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class MasterAnalysisResult:
     expectancy: Optional[ExpectancyResult]
     ml_regime: MLMarketRegimeResult
     market_summary: MarketSummary
+    xgboost_ml: MLPredictionResult  # XGBoost ML prediction
 
     # Master recommendation
     final_verdict: str  # "STRONG BUY", "BUY", "HOLD", "SELL", "STRONG SELL", "NO TRADE"
@@ -81,6 +83,7 @@ class MasterAIOrchestrator:
         self.risk_manager = RiskManagementAI()
         self.expectancy_calc = ExpectancyCalculator()
         self.ml_regime_detector = MLMarketRegimeDetector()
+        self.xgboost_analyzer = XGBoostMLAnalyzer()
 
         # Thresholds
         self.min_trade_quality_score = 60
@@ -95,7 +98,10 @@ class MasterAIOrchestrator:
         instrument: str = "NIFTY",
         days_to_expiry: int = 5,
         historical_trades: Optional[pd.DataFrame] = None,
-        trade_params: Optional[Dict] = None
+        trade_params: Optional[Dict] = None,
+        option_screener_data: Optional[Dict] = None,
+        bias_results: Optional[Dict] = None,
+        sentiment_score: float = 0.0
     ) -> MasterAnalysisResult:
         """
         Complete market analysis combining ALL modules
@@ -109,6 +115,9 @@ class MasterAIOrchestrator:
             days_to_expiry: Days until expiry
             historical_trades: Past trade history for expectancy
             trade_params: Dict with entry, stop, target prices
+            option_screener_data: Option screener analysis data (momentum, gamma, etc.)
+            bias_results: Technical bias analysis data (13 indicators from bias_analysis.py)
+            sentiment_score: Overall market sentiment score from AI news analysis
 
         Returns:
             MasterAnalysisResult with complete analysis and recommendation
@@ -200,7 +209,24 @@ class MasterAIOrchestrator:
             )
             reasoning.append(f"Risk: {risk_result.risk_level} (Score: {risk_result.risk_score:.0f}/100)")
 
-        # ========== MODULE 10: MARKET SUMMARY ==========
+        # ========== MODULE 10: XGBOOST ML ANALYSIS ==========
+        print("🤖 Running XGBoost ML Analysis...")
+        xgboost_result = self.xgboost_analyzer.analyze_complete_market(
+            df=df,
+            bias_results=bias_results,
+            option_chain=option_chain,
+            volatility_result=volatility_result,
+            oi_trap_result=oi_trap_result,
+            cvd_result=cvd_result,
+            participant_result=participant_result,
+            liquidity_result=liquidity_result,
+            ml_regime_result=ml_regime_result,
+            sentiment_score=sentiment_score,
+            option_screener_data=option_screener_data
+        )
+        reasoning.append(f"XGBoost ML: {xgboost_result.prediction} ({xgboost_result.confidence:.0f}% conf)")
+
+        # ========== MODULE 11: MARKET SUMMARY ==========
         print("📋 Generating Market Summary...")
         market_summary = generate_market_summary(
             ml_regime=ml_regime_result,
@@ -244,6 +270,7 @@ class MasterAIOrchestrator:
             expectancy=expectancy_result,
             ml_regime=ml_regime_result,
             market_summary=market_summary,
+            xgboost_ml=xgboost_result,
             final_verdict=final_verdict,
             confidence=confidence,
             risk_reward_ratio=rr_ratio,
