@@ -1219,7 +1219,7 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
                 st.markdown(f"**{metric}**: {emoji} {score:+.1f} - {interpretation}")
 
 
-def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses, sector_rotation_data=None):
+def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses, sector_rotation_data=None, seller_bias_result=None, nearest_sup=None, nearest_res=None, moment_metrics=None, days_to_expiry=None):
     """
     Display a consolidated dashboard of the most important market sentiment indicators
     Organized in a clean tabulation format
@@ -1411,6 +1411,62 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
                 st.markdown("**📉 Lagging Sectors:**")
                 for sector in laggards:
                     st.markdown(f"- {sector['sector']}: {sector['change_pct']:+.2f}%")
+
+    st.markdown("---")
+
+    # FINAL ASSESSMENT
+    if seller_bias_result and atm_bias and oi_pcr_metrics:
+        # Prepare ATM bias summary
+        atm_verdict = atm_bias.get("verdict", "N/A")
+        atm_score = atm_bias.get("total_score", 0)
+        atm_bias_summary = f"ATM Bias: {atm_verdict} ({atm_score:.2f} score)"
+
+        # Prepare moment summary
+        if moment_metrics:
+            moment_burst = moment_metrics.get("momentum_burst", {}).get("score", 0)
+            orderbook_pressure = moment_metrics.get("orderbook", {}).get("pressure", 0) if moment_metrics.get("orderbook", {}).get("available") else 0
+            moment_summary = f"Burst: {moment_burst}/100, Pressure: {orderbook_pressure:+.2f}"
+        else:
+            moment_summary = "Moment indicators neutral"
+
+        # Prepare OI/PCR summary
+        oi_pcr_summary = f"PCR: {oi_pcr_metrics['pcr_total']:.2f} ({oi_pcr_metrics['pcr_sentiment']}) | CALL OI: {oi_pcr_metrics['total_ce_oi']:,} | PUT OI: {oi_pcr_metrics['total_pe_oi']:,} | ATM Conc: {oi_pcr_metrics['atm_concentration_pct']:.1f}%"
+
+        # Prepare expiry summary
+        if expiry_spike_data and expiry_spike_data.get('spike_risk_score', 0) > 60:
+            expiry_summary = f"⚠️ HIGH SPIKE RISK ({expiry_spike_data['spike_risk_score']}/100) - {expiry_spike_data.get('spike_type', 'SQUEEZE')}"
+        elif days_to_expiry is not None:
+            expiry_summary = f"Expiry in {days_to_expiry:.1f} days"
+        else:
+            expiry_summary = "Expiry data unavailable"
+
+        # Support and resistance strings
+        support_str = f"₹{nearest_sup['strike']:,}" if nearest_sup else "N/A"
+        resistance_str = f"₹{nearest_res['strike']:,}" if nearest_res else "N/A"
+
+        # Max Pain string
+        max_pain_str = f"₹{seller_max_pain.get('max_pain_strike', 0):,}" if seller_max_pain else "N/A"
+
+        st.markdown(f'''
+        <div style='
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 25px;
+            border-radius: 12px;
+            border: 3px solid #ffa500;
+            margin-bottom: 20px;
+        '>
+            <h3 style='color: #ffa500; margin-bottom: 15px;'>🎯 FINAL ASSESSMENT (Seller + ATM Bias + Moment + Expiry + OI/PCR)</h3>
+            <p style='margin: 8px 0;'><strong>Market Makers are telling us:</strong> {seller_bias_result["explanation"]}</p>
+            <p style='margin: 8px 0;'><strong>ATM Zone Analysis:</strong> {atm_bias_summary}</p>
+            <p style='margin: 8px 0;'><strong>Their game plan:</strong> {seller_bias_result["action"]}</p>
+            <p style='margin: 8px 0;'><strong>Moment Detector:</strong> {moment_summary}</p>
+            <p style='margin: 8px 0;'><strong>OI/PCR Analysis:</strong> {oi_pcr_summary}</p>
+            <p style='margin: 8px 0;'><strong>Expiry Context:</strong> {expiry_summary}</p>
+            <p style='margin: 8px 0;'><strong>Key defense levels:</strong> {support_str} (Support) | {resistance_str} (Resistance)</p>
+            <p style='margin: 8px 0;'><strong>Max OI Walls:</strong> CALL: ₹{oi_pcr_metrics['max_ce_strike']:,} | PUT: ₹{oi_pcr_metrics['max_pe_strike']:,}</p>
+            <p style='margin: 8px 0;'><strong>Preferred price level:</strong> {max_pain_str} (Max Pain)</p>
+        </div>
+        ''', unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -4240,6 +4296,11 @@ def render_nifty_option_screener():
         'oi_pcr_metrics': oi_pcr_metrics,
         'strike_analyses': strike_analyses,
         'sector_rotation_data': sector_rotation_data,
+        'seller_bias_result': seller_bias_result,
+        'nearest_sup': nearest_sup,
+        'nearest_res': nearest_res,
+        'moment_metrics': moment_metrics,
+        'days_to_expiry': days_to_expiry,
         'last_updated': datetime.now()
     }
 
@@ -4252,7 +4313,12 @@ def render_nifty_option_screener():
         expiry_spike_data=expiry_spike_data,
         oi_pcr_metrics=oi_pcr_metrics,
         strike_analyses=strike_analyses,
-        sector_rotation_data=sector_rotation_data
+        sector_rotation_data=sector_rotation_data,
+        seller_bias_result=seller_bias_result,
+        nearest_sup=nearest_sup,
+        nearest_res=nearest_res,
+        moment_metrics=moment_metrics,
+        days_to_expiry=days_to_expiry
     )
 
     st.markdown("---")
