@@ -189,6 +189,14 @@ class AdvancedChartAnalysis:
                 except Exception as e:
                     raise ValueError(f"Unable to convert dataframe index to datetime: {e}")
 
+            # Convert timestamps to IST timezone for proper display
+            if df.index.tz is None:
+                # If timestamps are naive (no timezone), assume UTC and convert to IST
+                df.index = df.index.tz_localize('UTC').tz_convert(IST)
+            elif df.index.tz != IST:
+                # If timestamps have a different timezone, convert to IST
+                df.index = df.index.tz_convert(IST)
+
             # Create indicators with custom parameters
             vob_indicator = None
             if show_vob:
@@ -380,13 +388,17 @@ class AdvancedChartAnalysis:
 
         fig.update_layout(
             title=f'{symbol} Advanced Chart Analysis',
-            xaxis_title='Time',
+            xaxis_title='Time (IST)',
             yaxis_title='Price',
             template='plotly_dark',
             height=chart_height,
             showlegend=True,
             xaxis_rangeslider_visible=False,
-            hovermode='x unified'
+            hovermode='x unified',
+            xaxis=dict(
+                tickformat='%H:%M:%S',  # Format time as HH:MM:SS
+                hoverformat='%Y-%m-%d %H:%M:%S %Z'  # Show full datetime with timezone on hover
+            )
         )
 
         return fig

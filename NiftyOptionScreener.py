@@ -3597,8 +3597,8 @@ def load_option_screener_data_silently():
 
         # Calculate days to expiry
         try:
-            expiry_dt = datetime.strptime(expiry, "%Y-%m-%d").replace(hour=15, minute=30)
-            now = datetime.now()
+            expiry_dt = datetime.strptime(expiry, "%Y-%m-%d").replace(hour=15, minute=30, tzinfo=IST)
+            now = get_ist_now()
             tau = max((expiry_dt - now).total_seconds() / (365.25*24*3600), 1/365.25)
             days_to_expiry = (expiry_dt - now).total_seconds() / (24 * 3600)
         except Exception:
@@ -3711,12 +3711,17 @@ def load_option_screener_data_silently():
             'oi_pcr_metrics': oi_pcr_metrics,
             'strike_analyses': strike_analyses,
             'sector_rotation_data': sector_rotation_data,
-            'last_updated': datetime.now()
+            'last_updated': get_ist_now()
         }
 
         return True
     except Exception as e:
-        # Silently fail - don't show errors
+        # Log the error to session state for debugging
+        st.session_state.nifty_option_screener_error = {
+            'error': str(e),
+            'timestamp': get_ist_now()
+        }
+        # Return False to indicate failure
         return False
 
 # -----------------------
