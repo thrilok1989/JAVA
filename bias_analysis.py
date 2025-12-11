@@ -368,7 +368,7 @@ class BiasAnalysisPro:
         up_vol = ((df['Close'] > df['Open']).astype(int) * df['Volume']).sum()
         down_vol = ((df['Close'] < df['Open']).astype(int) * df['Volume']).sum()
 
-        volume_delta = up_vol - down_vol
+        volume_delta = down_vol - up_vol
         volume_bullish = volume_delta > 0
         volume_bearish = volume_delta < 0
 
