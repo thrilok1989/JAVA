@@ -1060,12 +1060,105 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
     """
     Display the ATM ±2 strikes tabulation with 12 bias metrics
     Highlights ATM strike prominently
+    Shows overall bias based on strike verdicts
     """
     if not strike_analyses:
         st.warning("⚠️ No strike data available for tabulation")
         return
 
+    # Get ATM strike analysis
+    atm_analysis = next((a for a in strike_analyses if a["strike_price"] == atm_strike), None)
+
+    if atm_analysis:
+        atm_verdict = atm_analysis["verdict"]
+        atm_total_bias = atm_analysis["total_bias"]
+
+        # Determine verdict color
+        if "BULLISH" in atm_verdict.upper():
+            verdict_color = "#00FF00"
+        elif "BEARISH" in atm_verdict.upper():
+            verdict_color = "#FF0000"
+        else:
+            verdict_color = "#FFD700"
+
+        # Count bullish and bearish metrics within ATM strike
+        bullish_metrics = sum(1 for score in atm_analysis["bias_scores"].values() if score > 0)
+        bearish_metrics = sum(1 for score in atm_analysis["bias_scores"].values() if score < 0)
+        total_metrics = len(atm_analysis["bias_scores"])
+    else:
+        atm_verdict = "N/A"
+        atm_total_bias = 0
+        verdict_color = "#FFD700"
+        bullish_metrics = 0
+        bearish_metrics = 0
+        total_metrics = 12
+
+    # Display overall bias summary
     st.markdown("### 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.markdown(f"""
+        <div style="
+            background: linear-gradient(135deg, #1a2e1a 0%, #2a3e2a 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border: 3px solid {verdict_color};
+            text-align: center;
+        ">
+            <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>ATM STRIKE VERDICT</div>
+            <div style='font-size: 2.5rem; color:{verdict_color}; font-weight:900;'>
+                {atm_verdict}
+            </div>
+            <div style='font-size: 1.2rem; color:#ffffff; margin-top: 10px;'>
+                Strike: {atm_strike} | Score: {atm_total_bias:+.2f}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div style="
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        ">
+            <div style='font-size: 0.9rem; color:#cccccc;'>🐂 BULLISH METRICS</div>
+            <div style='font-size: 1.8rem; color:#00ff88; font-weight:700;'>
+                {bullish_metrics} / {total_metrics}
+            </div>
+            <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>🐻 BEARISH METRICS</div>
+            <div style='font-size: 1.8rem; color:#ff4444; font-weight:700;'>
+                {bearish_metrics} / {total_metrics}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        bullish_pct = (bullish_metrics / total_metrics * 100) if total_metrics > 0 else 0
+        bearish_pct = (bearish_metrics / total_metrics * 100) if total_metrics > 0 else 0
+
+        st.markdown(f"""
+        <div style="
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        ">
+            <div style='font-size: 0.9rem; color:#cccccc;'>BULLISH %</div>
+            <div style='font-size: 1.8rem; color:#00ff88; font-weight:700;'>
+                {bullish_pct:.1f}%
+            </div>
+            <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>BEARISH %</div>
+            <div style='font-size: 1.8rem; color:#ff4444; font-weight:700;'>
+                {bearish_pct:.1f}%
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br/>", unsafe_allow_html=True)
 
     # Create header row
     metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "Verdict"]
@@ -1260,91 +1353,6 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
             """, unsafe_allow_html=True)
     else:
         st.info("No PCR data available")
-
-    st.markdown("---")
-
-    # Row 4: ATM Overall Bias Summary
-    st.markdown("### 🎯 ATM OVERALL BIAS")
-    if atm_bias:
-        atm_col1, atm_col2, atm_col3 = st.columns(3)
-
-        with atm_col1:
-            verdict = atm_bias.get("verdict", "N/A")
-            total_score = atm_bias.get("total_score", 0)
-
-            if "BULLISH" in verdict.upper():
-                atm_color = "#00FF00"
-            elif "BEARISH" in verdict.upper():
-                atm_color = "#FF0000"
-            else:
-                atm_color = "#FFD700"
-
-            st.markdown(f"""
-            <div style="
-                background: linear-gradient(135deg, #1a2e1a 0%, #2a3e2a 100%);
-                padding: 20px;
-                border-radius: 12px;
-                border: 3px solid {atm_color};
-                text-align: center;
-            ">
-                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>ATM VERDICT</div>
-                <div style='font-size: 2.5rem; color:{atm_color}; font-weight:900;'>
-                    {verdict}
-                </div>
-                <div style='font-size: 1.2rem; color:#ffffff; margin-top: 10px;'>
-                    Score: {total_score:+.2f}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with atm_col2:
-            call_oi = atm_bias.get("total_ce_oi_atm", 0)
-            put_oi = atm_bias.get("total_pe_oi_atm", 0)
-
-            st.markdown(f"""
-            <div style="
-                background: rgba(0,0,0,0.3);
-                padding: 15px;
-                border-radius: 10px;
-                text-align: center;
-            ">
-                <div style='font-size: 0.9rem; color:#cccccc;'>CALL OI (ATM ±2)</div>
-                <div style='font-size: 1.8rem; color:#ff6b6b; font-weight:700;'>
-                    {call_oi:,.0f}
-                </div>
-                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>PUT OI (ATM ±2)</div>
-                <div style='font-size: 1.8rem; color:#51cf66; font-weight:700;'>
-                    {put_oi:,.0f}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with atm_col3:
-            net_delta = atm_bias.get("net_delta_exposure_atm", 0)
-            net_gamma = atm_bias.get("net_gamma_exposure_atm", 0)
-
-            delta_color = "#00ff88" if net_delta > 0 else "#ff4444" if net_delta < 0 else "#66b3ff"
-            gamma_color = "#00ff88" if net_gamma > 0 else "#ff4444" if net_gamma < 0 else "#66b3ff"
-
-            st.markdown(f"""
-            <div style="
-                background: rgba(0,0,0,0.3);
-                padding: 15px;
-                border-radius: 10px;
-                text-align: center;
-            ">
-                <div style='font-size: 0.9rem; color:#cccccc;'>Net Delta Exposure</div>
-                <div style='font-size: 1.8rem; color:{delta_color}; font-weight:700;'>
-                    {net_delta:,.0f}
-                </div>
-                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>Net Gamma Exposure</div>
-                <div style='font-size: 1.8rem; color:{gamma_color}; font-weight:700;'>
-                    {net_gamma:,.0f}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    else:
-        st.info("No ATM bias data available")
 
     st.markdown("---")
 
