@@ -2594,6 +2594,77 @@ def safe_float(x, default=np.nan):
     except:
         return default
 
+def seller_bias_direction(chg_oi, prev_ltp, ltp, oi, option_type):
+    """
+    Determine seller bias direction based on OI changes and price movement.
+
+    For sellers (option writers):
+    - CE writers are bearish (expect price to stay below strike)
+    - PE writers are bullish (expect price to stay above strike)
+
+    Args:
+        chg_oi: Change in open interest
+        prev_ltp: Previous last traded price (can be None)
+        ltp: Current last traded price
+        oi: Current open interest
+        option_type: "CE" or "PE"
+
+    Returns:
+        String indicating bias direction: "BULLISH", "BEARISH", or "NEUTRAL"
+    """
+    # If no OI, return neutral
+    if oi == 0:
+        return "NEUTRAL"
+
+    # Calculate price change if we have previous LTP
+    price_change = 0
+    if prev_ltp is not None and prev_ltp > 0:
+        price_change = ltp - prev_ltp
+
+    # For CE (Call) options:
+    # - Increasing OI + Decreasing price = Active call selling (BEARISH)
+    # - Increasing OI + Increasing price = Call buying or covering (BULLISH)
+    if option_type == "CE":
+        if chg_oi > 0:
+            # New call positions opened
+            if price_change < 0:
+                return "BEARISH"  # Call selling (bearish)
+            elif price_change > 0:
+                return "BULLISH"  # Call buying (bullish)
+            else:
+                return "BEARISH"  # Default to bearish for call writers
+        elif chg_oi < 0:
+            # Calls being closed
+            if price_change < 0:
+                return "BULLISH"  # Call sellers covering (bullish)
+            else:
+                return "NEUTRAL"
+        else:
+            return "NEUTRAL"
+
+    # For PE (Put) options:
+    # - Increasing OI + Decreasing price = Active put selling (BULLISH from seller's view)
+    # - Increasing OI + Increasing price = Put buying or covering (BEARISH)
+    elif option_type == "PE":
+        if chg_oi > 0:
+            # New put positions opened
+            if price_change < 0:
+                return "BULLISH"  # Put selling (bullish)
+            elif price_change > 0:
+                return "BEARISH"  # Put buying (bearish)
+            else:
+                return "BULLISH"  # Default to bullish for put writers
+        elif chg_oi < 0:
+            # Puts being closed
+            if price_change < 0:
+                return "BEARISH"  # Put sellers covering (bearish)
+            else:
+                return "NEUTRAL"
+        else:
+            return "NEUTRAL"
+
+    return "NEUTRAL"
+
 def strike_gap_from_series(series):
     diffs = series.sort_values().diff().dropna()
     if diffs.empty:
