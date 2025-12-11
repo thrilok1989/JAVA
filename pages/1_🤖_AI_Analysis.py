@@ -70,43 +70,61 @@ if not AI_MODULES_AVAILABLE:
     st.error("❌ Advanced AI modules not found. Please check installation.")
     st.stop()
 
-# Check if data is available in session state
-data_available = (
-    'data_df' in st.session_state and
-    st.session_state.data_df is not None and
-    len(st.session_state.data_df) > 0
-)
+# Auto-load market data if not already available
+if 'data_df' not in st.session_state or st.session_state.data_df is None or len(st.session_state.data_df) == 0:
+    with st.spinner("📊 Loading NIFTY market data for analysis..."):
+        try:
+            # Import from main app
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from app import get_cached_chart_data
 
-if not data_available:
-    st.warning("⚠️ No market data loaded")
-    st.info("""
-    ### 📊 How to Load Data:
+            # Fetch NIFTY data
+            df = get_cached_chart_data('^NSEI', '1d', '1m')
 
-    1. Go back to the **main app** (Home page)
-    2. Navigate to **"🌟 Overall Market Sentiment"** tab
-    3. Wait for data to load from Dhan API
-    4. Return to this page to see AI analysis
+            if df is not None and not df.empty:
+                # Add ATR indicator if not present
+                if 'ATR' not in df.columns:
+                    from advanced_chart_analysis import AdvancedChartAnalysis
+                    chart_analyzer = AdvancedChartAnalysis()
+                    df = chart_analyzer.add_indicators(df)
 
-    **OR** use the button below to go back to the main app:
-    """)
+                # Store in session state
+                st.session_state.data_df = df
+                st.success("✅ Market data loaded successfully!")
+            else:
+                st.error("❌ Failed to load market data. Please check your connection and try again.")
+                st.info("""
+                ### 📊 Troubleshooting:
 
-    st.markdown("""
-    <a href="/" target="_self">
-        <button style="
-            background-color: #4CAF50;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        ">
-            ← Back to Main App
-        </button>
-    </a>
-    """, unsafe_allow_html=True)
+                1. Check your internet connection
+                2. Verify Dhan API credentials
+                3. Try refreshing the page
+                4. Or go back to the main app
+                """)
 
-    st.stop()
+                st.markdown("""
+                <a href="/" target="_self">
+                    <button style="
+                        background-color: #4CAF50;
+                        color: white;
+                        padding: 12px 24px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 16px;
+                    ">
+                        ← Back to Main App
+                    </button>
+                </a>
+                """, unsafe_allow_html=True)
+                st.stop()
+        except Exception as e:
+            st.error(f"❌ Error loading data: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+            st.stop()
 
 # ============================================================================
 # PREPARE DATA

@@ -1379,6 +1379,129 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
 
     st.markdown("---")
 
+    # NEW: ML Market Regime Detection Display
+    if moment_metrics and 'market_regime' in moment_metrics:
+        regime_data = moment_metrics['market_regime']
+        st.markdown("### 🤖 ML MARKET REGIME DETECTION")
+
+        regime_col1, regime_col2, regime_col3, regime_col4 = st.columns(4)
+
+        # Determine regime color
+        regime = regime_data.get('regime', 'Unknown')
+        if 'Trending Up' in regime:
+            regime_color = "#00ff88"
+            regime_icon = "📈"
+        elif 'Trending Down' in regime:
+            regime_color = "#ff4444"
+            regime_icon = "📉"
+        elif 'Volatile' in regime or 'Breakout' in regime:
+            regime_color = "#ff9800"
+            regime_icon = "⚡"
+        elif 'Range' in regime:
+            regime_color = "#00bcd4"
+            regime_icon = "↔️"
+        elif 'Consolidation' in regime:
+            regime_color = "#9c27b0"
+            regime_icon = "⏸️"
+        else:
+            regime_color = "#888888"
+            regime_icon = "❓"
+
+        with regime_col1:
+            confidence = regime_data.get('confidence', 0)
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 3px solid {regime_color};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>REGIME</div>
+                <div style='font-size: 2.5rem; color:{regime_color}; font-weight:900;'>
+                    {regime_icon}
+                </div>
+                <div style='font-size: 1.3rem; color:{regime_color}; margin-top: 10px; font-weight:700;'>
+                    {regime}
+                </div>
+                <div style='font-size: 0.9rem; color:#aaaaaa; margin-top: 5px;'>
+                    Confidence: {confidence:.1f}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with regime_col2:
+            trend_strength = regime_data.get('trend_strength', 0)
+            trend_color = "#00ff88" if trend_strength > 60 else ("#ffa500" if trend_strength > 40 else "#ff4444")
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 2px solid {trend_color};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>TREND STRENGTH</div>
+                <div style='font-size: 2.5rem; color:{trend_color}; font-weight:900;'>
+                    {trend_strength:.0f}%
+                </div>
+                <div style='font-size: 0.9rem; color:#aaaaaa; margin-top: 10px;'>
+                    {'🔥 Strong' if trend_strength > 60 else ('⚡ Moderate' if trend_strength > 40 else '💤 Weak')}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with regime_col3:
+            vol_state = regime_data.get('volatility_state', 'Unknown')
+            vol_color_map = {
+                'Low': '#00ff88',
+                'Normal': '#00bcd4',
+                'High': '#ff9800',
+                'Extreme': '#ff4444'
+            }
+            vol_color = vol_color_map.get(vol_state, '#888888')
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 2px solid {vol_color};
+                text-align: center;
+            ">
+                <div style='font-size: 1rem; color:#cccccc; margin-bottom: 10px;'>VOLATILITY</div>
+                <div style='font-size: 2rem; color:{vol_color}; font-weight:700;'>
+                    {vol_state}
+                </div>
+                <div style='font-size: 0.9rem; color:#aaaaaa; margin-top: 10px;'>
+                    State
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with regime_col4:
+            strategy = regime_data.get('recommended_strategy', 'N/A')
+            timeframe = regime_data.get('optimal_timeframe', 'N/A')
+            st.markdown(f"""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px;
+                border-radius: 12px;
+                border: 2px solid #666;
+                text-align: center;
+            ">
+                <div style='font-size: 0.9rem; color:#cccccc;'>STRATEGY</div>
+                <div style='font-size: 1.3rem; color:#00bcd4; font-weight:700;'>
+                    {strategy}
+                </div>
+                <div style='font-size: 0.9rem; color:#cccccc; margin-top: 10px;'>TIMEFRAME</div>
+                <div style='font-size: 1.3rem; color:#ffa500; font-weight:700;'>
+                    {timeframe}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("---")
+
     # Row 5: Sector Rotation Analysis Bias
     if sector_rotation_data and sector_rotation_data.get('success'):
         st.markdown("### 🔄 SECTOR ROTATION ANALYSIS BIAS")
@@ -4274,13 +4397,78 @@ def render_nifty_option_screener():
     # ---- NEW: Compute 4 moment metrics ----
     orderbook = get_nifty_orderbook_depth()
     orderbook_metrics = orderbook_pressure_score(orderbook) if orderbook else {"available": False, "pressure": 0.0}
-    
+
     moment_metrics = {
         "momentum_burst": compute_momentum_burst(st.session_state["moment_history"]),
         "orderbook": orderbook_metrics,
         "gamma_cluster": compute_gamma_cluster(merged, atm_strike, window=2),
         "oi_accel": compute_oi_velocity_acceleration(st.session_state["moment_history"], atm_strike, window_strikes=2)
     }
+
+    # ---- NEW: ML MARKET REGIME DETECTION ----
+    try:
+        from src.ml_market_regime import MLMarketRegimeDetector
+
+        # Fetch NIFTY price data for regime detection
+        if 'data_df' not in st.session_state or st.session_state.data_df is None:
+            # Import get_cached_chart_data from app
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            from app import get_cached_chart_data
+
+            price_df = get_cached_chart_data('^NSEI', '1d', '1m')
+            if price_df is not None and not price_df.empty:
+                # Add indicators if not present
+                if 'ATR' not in price_df.columns:
+                    from advanced_chart_analysis import AdvancedChartAnalysis
+                    chart_analyzer = AdvancedChartAnalysis()
+                    price_df = chart_analyzer.add_indicators(price_df)
+                st.session_state.data_df = price_df
+            else:
+                price_df = None
+        else:
+            price_df = st.session_state.data_df
+
+        # Detect market regime
+        if price_df is not None and not price_df.empty:
+            regime_detector = MLMarketRegimeDetector()
+            ml_regime_result = regime_detector.detect_regime(
+                df=price_df,
+                cvd_result=None,
+                volatility_result=None,
+                oi_trap_result=None
+            )
+
+            # Add regime to moment metrics
+            moment_metrics['market_regime'] = {
+                'regime': ml_regime_result.regime,
+                'confidence': ml_regime_result.confidence,
+                'trend_strength': ml_regime_result.trend_strength,
+                'volatility_state': ml_regime_result.volatility_state,
+                'recommended_strategy': ml_regime_result.recommended_strategy,
+                'optimal_timeframe': ml_regime_result.optimal_timeframe
+            }
+        else:
+            # Fallback if data not available
+            moment_metrics['market_regime'] = {
+                'regime': 'Unknown',
+                'confidence': 0.0,
+                'trend_strength': 0.0,
+                'volatility_state': 'Unknown',
+                'recommended_strategy': 'Wait for data',
+                'optimal_timeframe': 'N/A'
+            }
+    except Exception as e:
+        # Fallback on error
+        moment_metrics['market_regime'] = {
+            'regime': f'Error: {str(e)[:50]}',
+            'confidence': 0.0,
+            'trend_strength': 0.0,
+            'volatility_state': 'Unknown',
+            'recommended_strategy': 'Check logs',
+            'optimal_timeframe': 'N/A'
+        }
     
     # ============================================
     # 🎯 ATM BIAS ANALYSIS (NEW)
