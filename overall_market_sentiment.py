@@ -1423,6 +1423,118 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         st.info("💡 For more detailed analysis, visit the **NIFTY Option Screener v7.0** tab")
 
     # ─────────────────────────────────────────────────────────────────
+    # 4. STOCK PERFORMANCE (MARKET BREADTH) - VISIBLE ON TAB 0
+    # ─────────────────────────────────────────────────────────────────
+    st.markdown("---")
+
+    if 'Stock Performance' in result.get('sources', {}):
+        source_data = result['sources']['Stock Performance']
+
+        st.markdown("### 📊 Stock Performance (Market Breadth) - Weight: 2.0")
+
+        bias = source_data.get('bias', 'NEUTRAL')
+        score = source_data.get('score', 0)
+        confidence = source_data.get('confidence', 0)
+        breadth_pct = source_data.get('breadth_pct', 0)
+        avg_change = source_data.get('avg_change', 0)
+        bullish_stocks = source_data.get('bullish_stocks', 0)
+        bearish_stocks = source_data.get('bearish_stocks', 0)
+        neutral_stocks = source_data.get('neutral_stocks', 0)
+
+        # Color based on bias
+        if bias == 'BULLISH':
+            bg_color = '#00ff88'
+            text_color = 'black'
+            icon = '🐂'
+        elif bias == 'BEARISH':
+            bg_color = '#ff4444'
+            text_color = 'white'
+            icon = '🐻'
+        else:
+            bg_color = '#ffa500'
+            text_color = 'white'
+            icon = '⚖️'
+
+        # Display summary card
+        st.markdown(f"""
+        <div style='background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+                    padding: 20px; border-radius: 15px; margin-bottom: 15px;
+                    border: 1px solid #3d3d3d;'>
+            <div style='display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px;'>
+                <div style='background: {bg_color}; padding: 15px; border-radius: 10px; text-align: center;'>
+                    <div style='font-size: 28px; margin-bottom: 5px;'>{icon}</div>
+                    <div style='font-size: 18px; font-weight: bold; color: {text_color}; margin-bottom: 5px;'>{bias}</div>
+                    <div style='font-size: 11px; color: {text_color}; opacity: 0.8;'>Overall Bias</div>
+                </div>
+                <div style='background: #2d2d2d; padding: 15px; border-radius: 10px; text-align: center;
+                            border-left: 4px solid {bg_color};'>
+                    <div style='font-size: 24px; color: {bg_color}; font-weight: bold; margin-bottom: 5px;'>{score:+.1f}</div>
+                    <div style='font-size: 11px; color: #888;'>Score</div>
+                </div>
+                <div style='background: #2d2d2d; padding: 15px; border-radius: 10px; text-align: center;
+                            border-left: 4px solid #6495ED;'>
+                    <div style='font-size: 24px; color: #6495ED; font-weight: bold; margin-bottom: 5px;'>{breadth_pct:.1f}%</div>
+                    <div style='font-size: 11px; color: #888;'>Market Breadth</div>
+                </div>
+                <div style='background: #2d2d2d; padding: 15px; border-radius: 10px; text-align: center;
+                            border-left: 4px solid #FFD700;'>
+                    <div style='font-size: 24px; color: #FFD700; font-weight: bold; margin-bottom: 5px;'>{avg_change:+.2f}%</div>
+                    <div style='font-size: 11px; color: #888;'>Avg Weighted Change</div>
+                </div>
+            </div>
+            <div style='margin-top: 15px; padding: 15px; background: #252525; border-radius: 10px;'>
+                <div style='display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center;'>
+                    <div>
+                        <div style='font-size: 20px; color: #00ff88; font-weight: bold;'>🟢 {bullish_stocks}</div>
+                        <div style='font-size: 11px; color: #888;'>Bullish Stocks</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 20px; color: #ff4444; font-weight: bold;'>🔴 {bearish_stocks}</div>
+                        <div style='font-size: 11px; color: #888;'>Bearish Stocks</div>
+                    </div>
+                    <div>
+                        <div style='font-size: 20px; color: #ffa500; font-weight: bold;'>🟡 {neutral_stocks}</div>
+                        <div style='font-size: 11px; color: #888;'>Neutral Stocks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Stock Performance Table
+        stock_details = source_data.get('stock_details', [])
+        if stock_details:
+            with st.expander("📋 **View Individual Stock Details**", expanded=False):
+                # Create DataFrame
+                stock_df = pd.DataFrame(stock_details)
+                stock_df['symbol'] = stock_df['symbol'].str.replace('.NS', '')
+                stock_df['change_pct'] = stock_df['change_pct'].apply(lambda x: f"{x:.2f}%")
+                stock_df['weight'] = stock_df['weight'].apply(lambda x: f"{x:.2f}%")
+
+                # Add bias column
+                def get_stock_bias(row):
+                    change = float(row['change_pct'].replace('%', ''))
+                    if change > 0.5:
+                        return "🐂 BULLISH"
+                    elif change < -0.5:
+                        return "🐻 BEARISH"
+                    else:
+                        return "⚖️ NEUTRAL"
+
+                stock_df['bias'] = stock_df.apply(get_stock_bias, axis=1)
+
+                # Rename columns
+                stock_df = stock_df.rename(columns={
+                    'symbol': 'Symbol',
+                    'change_pct': 'Change %',
+                    'weight': 'Weight',
+                    'bias': 'Bias'
+                })
+
+                st.dataframe(stock_df[['Symbol', 'Change %', 'Weight', 'Bias']],
+                           use_container_width=True, hide_index=True)
+
+    # ─────────────────────────────────────────────────────────────────
     # 5. PERPLEXITY AI MARKET INSIGHTS (REAL-TIME WEB RESEARCH)
     # ─────────────────────────────────────────────────────────────────
     st.markdown("---")
