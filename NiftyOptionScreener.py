@@ -3889,6 +3889,14 @@ def load_option_screener_data_silently():
             merged.at[i,"Vega_PE"] = greeks_pe["vega"]
             merged.at[i,"Seller_Bias_PE"] = seller_bias_pe
 
+            # GEX calculation (SELLER exposure)
+            notional = LOT_SIZE * spot
+            gex_ce = greeks_ce["gamma"] * notional * oi_ce
+            gex_pe = greeks_pe["gamma"] * notional * oi_pe
+            merged.at[i,"GEX_CE"] = gex_ce
+            merged.at[i,"GEX_PE"] = gex_pe
+            merged.at[i,"GEX_Net"] = gex_ce + gex_pe
+
             st.session_state["prev_ltps_seller"][key_ce] = ltp_ce
             st.session_state["prev_ltps_seller"][key_pe] = ltp_pe
             if not np.isnan(iv_ce):
