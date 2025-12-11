@@ -1229,58 +1229,7 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
     st.markdown("*Consolidated view of essential option chain metrics*")
     st.markdown("---")
 
-    # Row 1: Key Indicators
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.markdown("### 🎯 Overall Bias")
-        if overall_bias:
-            verdict = overall_bias.get("verdict", "N/A")
-            score = overall_bias.get("combined_score", 0)
-
-            if "BULLISH" in verdict.upper():
-                color = "#00FF00"
-            elif "BEARISH" in verdict.upper():
-                color = "#FF0000"
-            else:
-                color = "#FFD700"
-
-            st.markdown(f'<div style="background-color: {color}; padding: 15px; border-radius: 10px; text-align: center;">'
-                       f'<h2 style="margin: 0; color: #000;">{verdict}</h2>'
-                       f'<p style="margin: 5px 0 0 0; color: #000;">Score: {score:+.2f}</p>'
-                       f'</div>', unsafe_allow_html=True)
-        else:
-            st.info("No overall bias data")
-
-    with col2:
-        st.markdown("### 💰 Max Pain (Sellers)")
-        if seller_max_pain:
-            max_pain_strike = seller_max_pain.get("max_pain_strike", "N/A")
-            total_cost = seller_max_pain.get("total_cost", 0)
-
-            st.markdown(f'<div style="background-color: #FF6347; padding: 15px; border-radius: 10px; text-align: center;">'
-                       f'<h2 style="margin: 0; color: #fff;">{max_pain_strike}</h2>'
-                       f'<p style="margin: 5px 0 0 0; color: #fff;">Cost: ₹{total_cost/1e7:.2f}Cr</p>'
-                       f'</div>', unsafe_allow_html=True)
-        else:
-            st.info("No max pain data")
-
-    with col3:
-        st.markdown("### ⚡ GEX Analysis")
-        if total_gex_net is not None:
-            gex_sentiment = "🐂 Bullish Support" if total_gex_net > 0 else "🐻 Bearish Pressure"
-            color = "#00FF00" if total_gex_net > 0 else "#FF0000"
-
-            st.markdown(f'<div style="background-color: {color}; padding: 15px; border-radius: 10px; text-align: center;">'
-                       f'<h3 style="margin: 0; color: #000;">{gex_sentiment}</h3>'
-                       f'<p style="margin: 5px 0 0 0; color: #000;">Net GEX: {total_gex_net:,.0f}</p>'
-                       f'</div>', unsafe_allow_html=True)
-        else:
-            st.info("No GEX data")
-
-    st.markdown("---")
-
-    # Row 2: ATM ±2 Strike Tabulation
+    # ATM ±2 Strike Tabulation
     st.markdown("### 📊 ATM ±2 Strikes - Detailed Bias Tabulation")
     if strike_analyses:
         display_atm_strikes_tabulation(strike_analyses, atm_bias.get("atm_strike", 0) if atm_bias else 0)
