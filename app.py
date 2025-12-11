@@ -2770,8 +2770,8 @@ with tab7:
 
     with col3:
         show_volume = st.checkbox("📊 Volume Bars", value=True, key="show_volume")
-        show_om = st.checkbox("🎯 OM Indicator", value=False, key="show_om")
-        show_liquidity_profile = st.checkbox("💧 Liquidity Sentiment Profile", value=False, key="show_liquidity_profile")
+        show_om = st.checkbox("🎯 OM Indicator", value=True, key="show_om")
+        show_liquidity_profile = st.checkbox("💧 Liquidity Sentiment Profile", value=True, key="show_liquidity_profile")
 
     # Advanced Price Action Indicators
     st.markdown("**🎯 Advanced Price Action**")
@@ -3149,6 +3149,372 @@ with tab7:
                 with col5:
                     avg_volume = df_stats['volume'].mean()
                     st.metric("Avg Volume", f"{avg_volume:,.0f}")
+
+                # Indicator Data Tables
+                st.divider()
+                st.subheader("📊 Indicator Data Tables")
+                st.caption("Detailed data from all enabled indicators")
+
+                # Create tabs for each indicator category
+                indicator_tabs = []
+                if show_vob:
+                    indicator_tabs.append("📦 Volume Order Blocks")
+                if show_htf_sr:
+                    indicator_tabs.append("📊 HTF Support/Resistance")
+                if show_footprint:
+                    indicator_tabs.append("👣 Volume Footprint")
+                if show_rsi:
+                    indicator_tabs.append("📈 Ultimate RSI")
+                if show_om:
+                    indicator_tabs.append("🎯 OM Indicator")
+                if show_liquidity_profile:
+                    indicator_tabs.append("💧 Liquidity Profile")
+                if show_bos or show_choch or show_fibonacci or show_patterns:
+                    indicator_tabs.append("🎯 Price Action")
+
+                if indicator_tabs:
+                    tabs = st.tabs(indicator_tabs)
+                    tab_idx = 0
+
+                    # Volume Order Blocks Data
+                    if show_vob:
+                        with tabs[tab_idx]:
+                            from indicators.volume_order_blocks import VolumeOrderBlocks
+                            vob_indicator = VolumeOrderBlocks(**vob_params) if vob_params else VolumeOrderBlocks()
+                            vob_data = vob_indicator.calculate(df_stats)
+
+                            col1, col2 = st.columns(2)
+
+                            with col1:
+                                st.markdown("#### 🟢 Bullish Order Blocks")
+                                if vob_data['bullish_blocks']:
+                                    bullish_data = []
+                                    for i, block in enumerate(vob_data['bullish_blocks']):
+                                        bullish_data.append({
+                                            'Block #': i + 1,
+                                            'Lower': f"₹{block['lower']:.2f}",
+                                            'Upper': f"₹{block['upper']:.2f}",
+                                            'Mid': f"₹{block['mid']:.2f}",
+                                            'Volume': f"{block['volume']:,.0f}",
+                                            'Active': '✅' if block['active'] else '❌'
+                                        })
+                                    st.dataframe(pd.DataFrame(bullish_data), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No bullish order blocks detected")
+
+                            with col2:
+                                st.markdown("#### 🔴 Bearish Order Blocks")
+                                if vob_data['bearish_blocks']:
+                                    bearish_data = []
+                                    for i, block in enumerate(vob_data['bearish_blocks']):
+                                        bearish_data.append({
+                                            'Block #': i + 1,
+                                            'Lower': f"₹{block['lower']:.2f}",
+                                            'Upper': f"₹{block['upper']:.2f}",
+                                            'Mid': f"₹{block['mid']:.2f}",
+                                            'Volume': f"{block['volume']:,.0f}",
+                                            'Active': '✅' if block['active'] else '❌'
+                                        })
+                                    st.dataframe(pd.DataFrame(bearish_data), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No bearish order blocks detected")
+                        tab_idx += 1
+
+                    # HTF Support/Resistance Data
+                    if show_htf_sr:
+                        with tabs[tab_idx]:
+                            st.markdown("#### 📊 Higher Timeframe Levels")
+                            if htf_params and htf_params.get('levels_config'):
+                                from indicators.htf_support_resistance import HTFSupportResistance
+
+                                for level_config in htf_params['levels_config']:
+                                    htf_indicator = HTFSupportResistance(
+                                        timeframes=[level_config['timeframe']],
+                                        pivot_length=level_config['length']
+                                    )
+                                    levels = htf_indicator.calculate_levels(df_stats)
+
+                                    if levels:
+                                        st.markdown(f"**{level_config['timeframe']} Timeframe** (Length: {level_config['length']})")
+                                        levels_data = []
+                                        for level in levels:
+                                            levels_data.append({
+                                                'Type': level['type'].upper(),
+                                                'Price': f"₹{level['price']:.2f}",
+                                                'Timeframe': level['timeframe'],
+                                                'Strength': '🔴' * int(level.get('strength', 1))
+                                            })
+                                        st.dataframe(pd.DataFrame(levels_data), use_container_width=True, hide_index=True)
+                                        st.divider()
+                            else:
+                                st.info("No HTF levels configured")
+                        tab_idx += 1
+
+                    # Volume Footprint Data
+                    if show_footprint:
+                        with tabs[tab_idx]:
+                            from indicators.htf_volume_footprint import HTFVolumeFootprint
+                            footprint_indicator = HTFVolumeFootprint(**footprint_params) if footprint_params else HTFVolumeFootprint()
+                            footprint_data = footprint_indicator.calculate(df_stats)
+
+                            st.markdown("#### 👣 Volume Footprint Analysis")
+
+                            # Recent bars analysis
+                            recent_bars = df_stats.tail(10).copy()
+                            footprint_table = []
+
+                            for idx in range(len(recent_bars)):
+                                row_idx = recent_bars.index[idx]
+                                bar_data = {
+                                    'Time': recent_bars.index[idx].strftime('%H:%M') if hasattr(recent_bars.index[idx], 'strftime') else str(recent_bars.index[idx]),
+                                    'Open': f"₹{recent_bars['open'].iloc[idx]:.2f}",
+                                    'High': f"₹{recent_bars['high'].iloc[idx]:.2f}",
+                                    'Low': f"₹{recent_bars['low'].iloc[idx]:.2f}",
+                                    'Close': f"₹{recent_bars['close'].iloc[idx]:.2f}",
+                                    'Volume': f"{recent_bars['volume'].iloc[idx]:,.0f}",
+                                }
+
+                                # Add footprint data if available
+                                if 'buy_volume' in footprint_data:
+                                    buy_vol = footprint_data['buy_volume'][row_idx] if row_idx in footprint_data['buy_volume'].index else 0
+                                    sell_vol = footprint_data['sell_volume'][row_idx] if row_idx in footprint_data['sell_volume'].index else 0
+                                    bar_data['Buy Vol'] = f"{buy_vol:,.0f}"
+                                    bar_data['Sell Vol'] = f"{sell_vol:,.0f}"
+                                    bar_data['Delta'] = f"{buy_vol - sell_vol:,.0f}"
+
+                                footprint_table.append(bar_data)
+
+                            st.dataframe(pd.DataFrame(footprint_table), use_container_width=True, hide_index=True)
+                        tab_idx += 1
+
+                    # Ultimate RSI Data
+                    if show_rsi:
+                        with tabs[tab_idx]:
+                            from indicators.ultimate_rsi import UltimateRSI
+                            rsi_indicator = UltimateRSI(**rsi_params) if rsi_params else UltimateRSI()
+                            rsi_signals = rsi_indicator.get_signals(df_stats)
+
+                            st.markdown("#### 📈 Ultimate RSI History")
+
+                            # Last 20 values
+                            rsi_table = []
+                            for i in range(max(0, len(df_stats) - 20), len(df_stats)):
+                                rsi_table.append({
+                                    'Time': df_stats.index[i].strftime('%H:%M') if hasattr(df_stats.index[i], 'strftime') else str(df_stats.index[i]),
+                                    'Price': f"₹{df_stats['close'].iloc[i]:.2f}",
+                                    'RSI': f"{rsi_signals['ultimate_rsi'][i]:.2f}",
+                                    'Signal': f"{rsi_signals['signal'][i]:.2f}",
+                                    'Status': '🔴 OB' if rsi_signals['ultimate_rsi'][i] > (rsi_params.get('ob_level', 80) if rsi_params else 80) else '🟢 OS' if rsi_signals['ultimate_rsi'][i] < (rsi_params.get('os_level', 20) if rsi_params else 20) else '⚪ Neutral'
+                                })
+                            st.dataframe(pd.DataFrame(rsi_table), use_container_width=True, hide_index=True)
+
+                            # Current values
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Current RSI", f"{rsi_signals['ultimate_rsi'][-1]:.2f}")
+                            with col2:
+                                st.metric("Signal Line", f"{rsi_signals['signal'][-1]:.2f}")
+                            with col3:
+                                divergence = rsi_signals['ultimate_rsi'][-1] - rsi_signals['signal'][-1]
+                                st.metric("Divergence", f"{divergence:.2f}")
+                        tab_idx += 1
+
+                    # OM Indicator Data
+                    if show_om:
+                        with tabs[tab_idx]:
+                            from indicators.om_indicator import OMIndicator
+                            om_indicator = OMIndicator(**om_params) if om_params else OMIndicator()
+                            om_results = om_indicator.calculate(df_stats)
+
+                            st.markdown("#### 🎯 OM Indicator Modules")
+
+                            # VOB Module
+                            if 'vob' in om_results:
+                                st.markdown("**📦 Volume Order Blocks Module**")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    if om_results['vob'].get('bullish_blocks'):
+                                        st.markdown("🟢 **Bullish Blocks**")
+                                        vob_bull = []
+                                        for i, block in enumerate(om_results['vob']['bullish_blocks'][:5]):
+                                            vob_bull.append({
+                                                '#': i + 1,
+                                                'Lower': f"₹{block['lower']:.2f}",
+                                                'Upper': f"₹{block['upper']:.2f}",
+                                                'Active': '✅' if block['active'] else '❌'
+                                            })
+                                        st.dataframe(pd.DataFrame(vob_bull), use_container_width=True, hide_index=True)
+                                with col2:
+                                    if om_results['vob'].get('bearish_blocks'):
+                                        st.markdown("🔴 **Bearish Blocks**")
+                                        vob_bear = []
+                                        for i, block in enumerate(om_results['vob']['bearish_blocks'][:5]):
+                                            vob_bear.append({
+                                                '#': i + 1,
+                                                'Lower': f"₹{block['lower']:.2f}",
+                                                'Upper': f"₹{block['upper']:.2f}",
+                                                'Active': '✅' if block['active'] else '❌'
+                                            })
+                                        st.dataframe(pd.DataFrame(vob_bear), use_container_width=True, hide_index=True)
+                                st.divider()
+
+                            # Delta Module
+                            if 'delta' in om_results:
+                                st.markdown("**📊 Delta Module (Buy/Sell Pressure)**")
+                                delta_data = []
+                                delta_values = om_results['delta']
+                                for i in range(max(0, len(df_stats) - 10), len(df_stats)):
+                                    delta_data.append({
+                                        'Time': df_stats.index[i].strftime('%H:%M') if hasattr(df_stats.index[i], 'strftime') else str(df_stats.index[i]),
+                                        'Delta': f"{delta_values[i]:.2f}" if i < len(delta_values) else 'N/A',
+                                        'Signal': '🟢 Bullish' if i < len(delta_values) and delta_values[i] > 0 else '🔴 Bearish' if i < len(delta_values) else 'N/A'
+                                    })
+                                st.dataframe(pd.DataFrame(delta_data), use_container_width=True, hide_index=True)
+                                st.divider()
+
+                            # VIDYA Module
+                            if 'vidya' in om_results:
+                                st.markdown("**📈 VIDYA Trend Module**")
+                                vidya_data = []
+                                vidya_values = om_results['vidya']
+                                for i in range(max(0, len(df_stats) - 10), len(df_stats)):
+                                    vidya_data.append({
+                                        'Time': df_stats.index[i].strftime('%H:%M') if hasattr(df_stats.index[i], 'strftime') else str(df_stats.index[i]),
+                                        'Price': f"₹{df_stats['close'].iloc[i]:.2f}",
+                                        'VIDYA': f"₹{vidya_values[i]:.2f}" if i < len(vidya_values) else 'N/A',
+                                    })
+                                st.dataframe(pd.DataFrame(vidya_data), use_container_width=True, hide_index=True)
+                                st.divider()
+
+                            # HVP Module
+                            if 'hvp' in om_results and om_results['hvp'].get('pivots'):
+                                st.markdown("**🎯 High Volume Pivots**")
+                                hvp_data = []
+                                for i, pivot in enumerate(om_results['hvp']['pivots'][:10]):
+                                    hvp_data.append({
+                                        '#': i + 1,
+                                        'Price': f"₹{pivot['price']:.2f}",
+                                        'Type': pivot['type'].upper(),
+                                        'Volume': f"{pivot['volume']:,.0f}"
+                                    })
+                                st.dataframe(pd.DataFrame(hvp_data), use_container_width=True, hide_index=True)
+
+                        tab_idx += 1
+
+                    # Liquidity Sentiment Profile Data
+                    if show_liquidity_profile:
+                        with tabs[tab_idx]:
+                            from indicators.liquidity_sentiment_profile import LiquiditySentimentProfile
+                            lsp_indicator = LiquiditySentimentProfile(**liquidity_params) if liquidity_params else LiquiditySentimentProfile()
+                            lsp_data = lsp_indicator.calculate(df_stats)
+
+                            st.markdown("#### 💧 Liquidity & Sentiment Profile")
+
+                            if 'price_levels' in lsp_data and len(lsp_data['price_levels']) > 0:
+                                # Profile data table
+                                profile_data = []
+                                for level in lsp_data['price_levels']:
+                                    profile_data.append({
+                                        'Price': f"₹{level['price']:.2f}",
+                                        'Total Volume': f"{level.get('total_volume', 0):,.0f}",
+                                        'Buy Volume': f"{level.get('buy_volume', 0):,.0f}",
+                                        'Sell Volume': f"{level.get('sell_volume', 0):,.0f}",
+                                        'Sentiment': '🟢 Bullish' if level.get('buy_volume', 0) > level.get('sell_volume', 0) else '🔴 Bearish',
+                                        'Activity': '🔥' * min(5, int(level.get('total_volume', 0) / max(1, lsp_data.get('avg_volume', 1))))
+                                    })
+                                st.dataframe(pd.DataFrame(profile_data), use_container_width=True, hide_index=True, height=400)
+
+                                # Key levels
+                                st.divider()
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    if 'poc' in lsp_data:
+                                        st.metric("Point of Control", f"₹{lsp_data['poc']:.2f}")
+                                with col2:
+                                    if 'high_volume_node' in lsp_data:
+                                        st.metric("High Volume Node", f"₹{lsp_data['high_volume_node']:.2f}")
+                                with col3:
+                                    if 'low_volume_node' in lsp_data:
+                                        st.metric("Low Volume Node", f"₹{lsp_data['low_volume_node']:.2f}")
+                            else:
+                                st.info("No liquidity profile data available")
+                        tab_idx += 1
+
+                    # Price Action Data
+                    if show_bos or show_choch or show_fibonacci or show_patterns:
+                        with tabs[tab_idx]:
+                            from indicators.advanced_price_action import AdvancedPriceAction
+                            pa_indicator = AdvancedPriceAction()
+
+                            st.markdown("#### 🎯 Advanced Price Action Signals")
+
+                            # BOS Detection
+                            if show_bos:
+                                st.markdown("**🔺 Break of Structure (BOS)**")
+                                bos_data = pa_indicator.detect_bos(df_stats)
+                                if bos_data and len(bos_data) > 0:
+                                    bos_table = []
+                                    for bos in bos_data[-10:]:
+                                        bos_table.append({
+                                            'Index': bos.get('index', 'N/A'),
+                                            'Type': '🟢 Bullish' if bos['type'] == 'bullish' else '🔴 Bearish',
+                                            'Price': f"₹{bos['price']:.2f}",
+                                            'Strength': '🔴' * min(5, int(bos.get('strength', 1)))
+                                        })
+                                    st.dataframe(pd.DataFrame(bos_table), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No BOS signals detected")
+                                st.divider()
+
+                            # CHOCH Detection
+                            if show_choch:
+                                st.markdown("**🔄 Change of Character (CHOCH)**")
+                                choch_data = pa_indicator.detect_choch(df_stats)
+                                if choch_data and len(choch_data) > 0:
+                                    choch_table = []
+                                    for choch in choch_data[-10:]:
+                                        choch_table.append({
+                                            'Index': choch.get('index', 'N/A'),
+                                            'Type': '🟢 Bullish' if choch['type'] == 'bullish' else '🔴 Bearish',
+                                            'Price': f"₹{choch['price']:.2f}",
+                                        })
+                                    st.dataframe(pd.DataFrame(choch_table), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No CHOCH signals detected")
+                                st.divider()
+
+                            # Fibonacci Levels
+                            if show_fibonacci:
+                                st.markdown("**📐 Fibonacci Retracement Levels**")
+                                fib_levels = pa_indicator.calculate_fibonacci(df_stats)
+                                if fib_levels:
+                                    fib_table = []
+                                    for level_name, level_price in fib_levels.items():
+                                        fib_table.append({
+                                            'Level': level_name,
+                                            'Price': f"₹{level_price:.2f}"
+                                        })
+                                    st.dataframe(pd.DataFrame(fib_table), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No Fibonacci levels calculated")
+                                st.divider()
+
+                            # Patterns
+                            if show_patterns:
+                                st.markdown("**📊 Geometric Patterns**")
+                                patterns = pa_indicator.detect_patterns(df_stats)
+                                if patterns and len(patterns) > 0:
+                                    pattern_table = []
+                                    for pattern in patterns[-10:]:
+                                        pattern_table.append({
+                                            'Pattern': pattern['name'],
+                                            'Type': pattern['type'],
+                                            'Start': pattern.get('start_idx', 'N/A'),
+                                            'End': pattern.get('end_idx', 'N/A'),
+                                        })
+                                    st.dataframe(pd.DataFrame(pattern_table), use_container_width=True, hide_index=True)
+                                else:
+                                    st.info("No patterns detected")
 
                 # Trading signals based on indicators
                 st.divider()
