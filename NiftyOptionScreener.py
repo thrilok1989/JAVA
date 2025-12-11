@@ -3898,12 +3898,12 @@ def load_option_screener_data_silently():
 
         # Calculate all analyses
         atm_bias = analyze_atm_bias(merged, spot, atm_strike, strike_gap)
-        support_bias = analyze_support_bias(merged, spot, atm_strike, strike_gap)
-        resistance_bias = analyze_resistance_bias(merged, spot, atm_strike, strike_gap)
-        seller_bias_result = calculate_seller_bias_score(merged)
+        support_bias = analyze_support_resistance_bias(merged, spot, atm_strike, strike_gap, "Support")
+        resistance_bias = analyze_support_resistance_bias(merged, spot, atm_strike, strike_gap, "Resistance")
+        seller_bias_result = calculate_seller_market_bias(merged, spot, atm_strike)
         seller_max_pain = calculate_seller_max_pain(merged)
-        total_gex_net = calculate_total_gex(merged, spot)
-        oi_pcr_metrics = calculate_oi_pcr_metrics(merged, spot, atm_strike, strike_gap)
+        total_gex_net = merged["GEX_Net"].sum()
+        oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
         strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
         expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
 
