@@ -20,6 +20,12 @@ from market_hours_scheduler import is_within_trading_hours, scheduler
 from ai_analysis_adapter import run_ai_analysis, shutdown_ai_engine
 from perplexity_market_insights import render_market_insights_widget
 
+# Import option screener display function
+try:
+    from NiftyOptionScreener import display_overall_market_sentiment_summary
+except ImportError:
+    display_overall_market_sentiment_summary = None
+
 
 def calculate_stock_performance_sentiment(stock_data):
     """
@@ -1662,25 +1668,55 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
                 st.dataframe(tech_df, use_container_width=True, hide_index=True)
 
     # ─────────────────────────────────────────────────────────────────
-    # 3. NIFTY OPTION SCREENER v7.0 - LINK TO DEDICATED TAB
+    # 3. NIFTY OPTION SCREENER v7.0 - OVERALL MARKET SENTIMENT SUMMARY
     # ─────────────────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### 🎯 NIFTY Option Screener v7.0")
-    st.info("""
-    **🎯 For the complete NIFTY Option Screener v7.0 with Seller's Perspective, ATM Bias Analyzer,
-    Moment Detector, Expiry Spike Detector, and Enhanced OI/PCR Analytics, please visit the dedicated
-    "NIFTY Option Screener v7.0" tab.**
 
-    **Features available in the dedicated tab:**
-    - 100% Seller's Perspective Analysis
-    - 12-metric ATM Bias Analyzer
-    - Enhanced OI/PCR Analytics Dashboard
-    - Real-time Moment Detection
-    - Expiry Spike Probability Detector
-    - Gamma Exposure Analysis
-    - Max Pain Calculations
-    - And much more!
-    """)
+    # Check if we have option screener data in session state
+    if 'nifty_option_screener_data' in st.session_state and display_overall_market_sentiment_summary is not None:
+        option_data = st.session_state.nifty_option_screener_data
+
+        # Display the comprehensive market sentiment summary
+        display_overall_market_sentiment_summary(
+            overall_bias=option_data.get('overall_bias'),
+            atm_bias=option_data.get('atm_bias'),
+            seller_max_pain=option_data.get('seller_max_pain'),
+            total_gex_net=option_data.get('total_gex_net'),
+            expiry_spike_data=option_data.get('expiry_spike_data'),
+            oi_pcr_metrics=option_data.get('oi_pcr_metrics'),
+            strike_analyses=option_data.get('strike_analyses'),
+            sector_rotation_data=option_data.get('sector_rotation_data')
+        )
+
+        # Show last updated timestamp
+        last_updated = option_data.get('last_updated')
+        if last_updated:
+            st.caption(f"📅 Option chain data last updated: {last_updated.strftime('%Y-%m-%d %H:%M:%S IST')}")
+
+        st.info("💡 For more detailed analysis, visit the **NIFTY Option Screener v7.0** tab")
+    else:
+        # Show message if data not available
+        st.markdown("### 🎯 NIFTY Option Screener v7.0 - Market Sentiment Summary")
+        st.warning("""
+        ⚠️ **Option Chain Data Not Yet Loaded**
+
+        The comprehensive market sentiment summary from the NIFTY Option Screener v7.0 will appear here once loaded.
+
+        **To load the data:**
+        - Navigate to the **"🎯 NIFTY Option Screener v7.0"** tab
+        - The option chain will be fetched automatically
+        - Return to this tab to see the complete market sentiment dashboard
+
+        **What you'll see here:**
+        - 🎯 Overall Market Bias (ATM ±2, Support, Resistance, Seller Bias)
+        - 💰 Max Pain Analysis (Seller's Perspective)
+        - ⚡ GEX (Gamma Exposure) Analysis
+        - 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation
+        - 📊 PUT-CALL RATIO (PCR) Analysis
+        - 🎯 ATM Overall Bias Summary
+        - 🔄 Sector Rotation Analysis
+        - 📅 Expiry Spike Probability
+        """)
 
     # ─────────────────────────────────────────────────────────────────
     # 5. PERPLEXITY AI MARKET INSIGHTS (REAL-TIME WEB RESEARCH)
