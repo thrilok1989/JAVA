@@ -115,33 +115,6 @@ def test_data_cache_manager():
         return False
 
 
-def test_helpers_modules():
-    """Test helper modules import market hours scheduler"""
-    print("\n" + "="*70)
-    print("TEST 5: Helper Modules (nse_options_helpers, nse_options_analyzer)")
-    print("="*70)
-
-    results = []
-
-    # Test nse_options_helpers.py
-    try:
-        import nse_options_helpers
-        print(f"✓ nse_options_helpers imported successfully")
-        results.append(True)
-    except Exception as e:
-        print(f"✗ nse_options_helpers FAILED: {e}")
-        results.append(False)
-
-    # Test nse_options_analyzer.py
-    try:
-        import nse_options_analyzer
-        print(f"✓ nse_options_analyzer imported successfully")
-        results.append(True)
-    except Exception as e:
-        print(f"✗ nse_options_analyzer FAILED: {e}")
-        results.append(False)
-
-    return all(results)
 
 
 def test_timezone_consistency():
@@ -184,7 +157,6 @@ def main():
         test_config,
         test_market_data,
         test_data_cache_manager,
-        test_helpers_modules,
         test_timezone_consistency,
     ]
 

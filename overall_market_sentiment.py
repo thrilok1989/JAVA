@@ -6,9 +6,9 @@ Aggregates bias data from all sources to provide a comprehensive market sentimen
 Data Sources:
 1. Stock Performance (Market Breadth)
 2. Technical Indicators (Bias Analysis Pro - 13 indicators matching Pine Script)
-3. Option Chain ATM Zone Analysis (Multiple bias metrics)
-4. PCR Analysis (Put-Call Ratio for indices)
-5. AI Market Analysis (Enhanced with news, global data, and reasoning)
+3. AI Market Analysis (Enhanced with news, global data, and reasoning)
+
+Note: Option chain analysis is now handled separately by NiftyOptionScreener.py
 """
 
 import streamlit as st
@@ -688,50 +688,6 @@ def _run_bias_analysis():
         return False, errors
 
 
-def _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True):
-    """
-    Helper function to run option chain analysis
-    Returns: (success, errors)
-    """
-    errors = []
-    try:
-        from nse_options_helpers import calculate_and_store_atm_zone_bias_silent
-        from nse_options_analyzer import fetch_option_chain_data as fetch_oc
-
-        overall_data = {}
-        all_instruments = list(NSE_INSTRUMENTS['indices'].keys())
-
-        # Create progress indicators only if show_progress is True
-        if show_progress:
-            progress_bar = st.progress(0)
-            progress_text = st.empty()
-
-        for idx, instrument in enumerate(all_instruments):
-            if show_progress:
-                progress_text.text(f"Analyzing {instrument}... ({idx + 1}/{len(all_instruments)})")
-
-            # Fetch basic option chain data
-            data = fetch_oc(instrument)
-            overall_data[instrument] = data
-
-            # Calculate and store ATM zone bias data silently
-            calculate_and_store_atm_zone_bias_silent(instrument, NSE_INSTRUMENTS)
-
-            if show_progress:
-                progress_bar.progress((idx + 1) / len(all_instruments))
-
-        st.session_state['overall_option_data'] = overall_data
-
-        if show_progress:
-            progress_bar.progress(1.0)
-            progress_text.empty()
-
-        return True, []
-    except Exception as e:
-        errors.append(f"Option Chain Analysis: {str(e)}")
-        return False, errors
-
-
 async def _run_ai_analysis():
     """
     Helper function to run AI market analysis
@@ -795,8 +751,7 @@ async def run_all_analyses(NSE_INSTRUMENTS, show_progress=True):
     """
     Runs all analyses and stores results in session state:
     1. Bias Analysis Pro (includes stock data and technical indicators)
-    2. Option Chain Analysis (includes PCR and ATM zone analysis)
-    3. AI Market Analysis (enhanced with news, global data, and reasoning)
+    2. AI Market Analysis (enhanced with news, global data, and reasoning)
 
     Args:
         NSE_INSTRUMENTS: Instrument configuration
@@ -818,24 +773,7 @@ async def run_all_analyses(NSE_INSTRUMENTS, show_progress=True):
             success = success and success_bias
             errors.extend(errors_bias)
 
-        # 2. Run Option Chain Analysis for all instruments (only during trading hours for performance)
-        if is_within_trading_hours():
-            spinner_text = "📊 Running Option Chain Analysis for all instruments..."
-            if show_progress:
-                with st.spinner(spinner_text):
-                    success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress)
-                    success = success and success_oc
-                    errors.extend(errors_oc)
-            else:
-                success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress)
-                success = success and success_oc
-                errors.extend(errors_oc)
-        else:
-            # When market is closed, skip option chain analysis to save API quota
-            if show_progress:
-                st.info("ℹ️ Option chain analysis skipped (market closed). Using cached data.")
-
-        # 3. Run AI Market Analysis (only once per hour to save API quota)
+        # 2. Run AI Market Analysis (only once per hour to save API quota)
         current_time = time.time()
         ai_last_run = st.session_state.get('ai_last_run', 0)
         
@@ -1114,65 +1052,6 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         except Exception as e:
             # Silently handle error - will show info message later
             pass
-
-    # Check if option chain data needs to be loaded
-    option_data_missing = (
-        'overall_option_data' not in st.session_state or
-        not st.session_state.overall_option_data
-    )
-
-    atm_data_missing = all(
-        f'{instrument}_atm_zone_bias' not in st.session_state
-        for instrument in ['NIFTY', 'SENSEX', 'FINNIFTY', 'MIDCPNIFTY']
-    )
-
-    # Initialize flag to track if option chain data has been loaded at least once
-    if 'option_chain_initial_load_done' not in st.session_state:
-        st.session_state.option_chain_initial_load_done = False
-
-    # If option chain data is missing and we have NSE_INSTRUMENTS
-    if (option_data_missing or atm_data_missing) and NSE_INSTRUMENTS is not None:
-        # Auto-load on first page load (regardless of trading hours)
-        if not st.session_state.option_chain_initial_load_done:
-            with st.spinner("📊 Loading option chain data for all instruments..."):
-                try:
-                    success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True)
-                    st.session_state.option_chain_initial_load_done = True
-                    if success_oc:
-                        st.success("✅ Option chain data loaded successfully!")
-                        st.rerun()
-                    else:
-                        st.warning(f"⚠️ Some option chain data failed to load: {', '.join(errors_oc)}")
-                except Exception as e:
-                    st.warning(f"⚠️ Error loading option chain data: {str(e)}")
-                    st.info("💡 You can manually reload using the button below if needed.")
-
-        # After initial load, show manual reload button when market is closed
-        if not is_within_trading_hours():
-            if st.button("🔄 Reload Option Chain Data (PCR & ATM Metrics)",
-                        type="secondary",
-                        key="reload_option_chain_bias_metrics",
-                        help="Manually reload option chain data for PCR and ATM bias analysis"):
-                with st.spinner("📊 Reloading option chain data for all instruments..."):
-                    try:
-                        success_oc, errors_oc = _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=True)
-                        if success_oc:
-                            st.success("✅ Option chain data reloaded successfully!")
-                            st.rerun()
-                        else:
-                            st.error(f"❌ Failed to reload option chain data: {', '.join(errors_oc)}")
-                    except Exception as e:
-                        st.error(f"❌ Error reloading option chain data: {str(e)}")
-        else:
-            # Market is open - auto-reload silently if data is missing
-            if option_data_missing or atm_data_missing:
-                try:
-                    with st.spinner("🔄 Auto-loading option chain data..."):
-                        _run_option_chain_analysis(NSE_INSTRUMENTS, show_progress=False)
-                        st.rerun()
-                except Exception as e:
-                    # Silently handle error - will show info message later
-                    pass
 
     st.markdown("## 📊 BIAS METRICS SUMMARY")
     st.caption("Comprehensive bias analysis from PCR, ATM Strikes, and Sector Rotation")
