@@ -80,7 +80,27 @@ class AdvancedPriceAction:
     # BOS (BREAK OF STRUCTURE) DETECTION
     # =========================================================================
 
-    def detect_bos(self, df: pd.DataFrame, swing_highs: List[Dict], swing_lows: List[Dict]) -> List[Dict]:
+    def detect_bos(self, df: pd.DataFrame, swing_highs: List[Dict] = None, swing_lows: List[Dict] = None) -> List[Dict]:
+        """
+        Detect Break of Structure (BOS) events
+
+        This is a convenience wrapper that can be called with just a DataFrame.
+        If swing points are not provided, they will be calculated automatically.
+
+        Args:
+            df: DataFrame with OHLC data
+            swing_highs: Optional list of swing high points (will be calculated if not provided)
+            swing_lows: Optional list of swing low points (will be calculated if not provided)
+
+        Returns:
+            List of BOS events
+        """
+        if swing_highs is None or swing_lows is None:
+            swing_highs, swing_lows = self.find_swing_highs_lows(df)
+
+        return self._detect_bos_internal(df, swing_highs, swing_lows)
+
+    def _detect_bos_internal(self, df: pd.DataFrame, swing_highs: List[Dict], swing_lows: List[Dict]) -> List[Dict]:
         """
         Detect Break of Structure (BOS) events
 
@@ -147,7 +167,27 @@ class AdvancedPriceAction:
     # CHOCH (CHANGE OF CHARACTER) DETECTION
     # =========================================================================
 
-    def detect_choch(self, df: pd.DataFrame, swing_highs: List[Dict], swing_lows: List[Dict]) -> List[Dict]:
+    def detect_choch(self, df: pd.DataFrame, swing_highs: List[Dict] = None, swing_lows: List[Dict] = None) -> List[Dict]:
+        """
+        Detect Change of Character (CHOCH) events
+
+        This is a convenience wrapper that can be called with just a DataFrame.
+        If swing points are not provided, they will be calculated automatically.
+
+        Args:
+            df: DataFrame with OHLC data
+            swing_highs: Optional list of swing high points (will be calculated if not provided)
+            swing_lows: Optional list of swing low points (will be calculated if not provided)
+
+        Returns:
+            List of CHOCH events
+        """
+        if swing_highs is None or swing_lows is None:
+            swing_highs, swing_lows = self.find_swing_highs_lows(df)
+
+        return self._detect_choch_internal(df, swing_highs, swing_lows)
+
+    def _detect_choch_internal(self, df: pd.DataFrame, swing_highs: List[Dict], swing_lows: List[Dict]) -> List[Dict]:
         """
         Detect Change of Character (CHOCH) events
 
@@ -521,6 +561,81 @@ class AdvancedPriceAction:
         return patterns
 
     # =========================================================================
+    # CONVENIENCE WRAPPER METHODS FOR APP.PY
+    # =========================================================================
+
+    def calculate_fibonacci(self, df: pd.DataFrame) -> Dict:
+        """
+        Convenience wrapper for calculate_fibonacci_levels that matches app.py expectations
+
+        Args:
+            df: DataFrame with OHLC data
+
+        Returns:
+            Dict with Fibonacci retracement levels in simplified format
+        """
+        swing_highs, swing_lows = self.find_swing_highs_lows(df)
+        fib_result = self.calculate_fibonacci_levels(df, swing_highs, swing_lows)
+
+        if not fib_result.get('success', False):
+            return {}
+
+        # Return simplified format for display
+        return fib_result.get('retracement_levels', {})
+
+    def detect_patterns(self, df: pd.DataFrame) -> List[Dict]:
+        """
+        Detect all geometric patterns and return in simplified format for display
+
+        Args:
+            df: DataFrame with OHLC data
+
+        Returns:
+            List of detected patterns with name, type, and indices
+        """
+        swing_highs, swing_lows = self.find_swing_highs_lows(df)
+        patterns = []
+
+        # Detect all pattern types
+        head_shoulders = self.detect_head_and_shoulders(swing_highs, swing_lows)
+        for hs in head_shoulders:
+            patterns.append({
+                'name': 'Head and Shoulders',
+                'type': 'Bearish Reversal',
+                'start_idx': hs['left_shoulder']['index'],
+                'end_idx': hs['right_shoulder']['index']
+            })
+
+        inv_head_shoulders = self.detect_inverse_head_and_shoulders(swing_highs, swing_lows)
+        for ihs in inv_head_shoulders:
+            patterns.append({
+                'name': 'Inverse Head and Shoulders',
+                'type': 'Bullish Reversal',
+                'start_idx': ihs['left_shoulder']['index'],
+                'end_idx': ihs['right_shoulder']['index']
+            })
+
+        triangles = self.detect_triangles(swing_highs, swing_lows)
+        for tri in triangles:
+            patterns.append({
+                'name': tri['type'].replace('_', ' ').title(),
+                'type': 'Continuation',
+                'start_idx': tri['lower_trendline'][0]['index'] if tri['lower_trendline'] else 'N/A',
+                'end_idx': tri['lower_trendline'][-1]['index'] if tri['lower_trendline'] else 'N/A'
+            })
+
+        flags_pennants = self.detect_flags_and_pennants(df, swing_highs, swing_lows)
+        for fp in flags_pennants:
+            patterns.append({
+                'name': fp['type'].replace('_', ' ').title(),
+                'type': 'Continuation',
+                'start_idx': fp['flagpole_start'],
+                'end_idx': fp['flagpole_end']
+            })
+
+        return patterns
+
+    # =========================================================================
     # MAIN ANALYSIS FUNCTION
     # =========================================================================
 
@@ -538,8 +653,8 @@ class AdvancedPriceAction:
         swing_highs, swing_lows = self.find_swing_highs_lows(df)
 
         # Detect BOS and CHOCH
-        bos_events = self.detect_bos(df, swing_highs, swing_lows)
-        choch_events = self.detect_choch(df, swing_highs, swing_lows)
+        bos_events = self._detect_bos_internal(df, swing_highs, swing_lows)
+        choch_events = self._detect_choch_internal(df, swing_highs, swing_lows)
 
         # Calculate Fibonacci levels
         fib_levels = self.calculate_fibonacci_levels(df, swing_highs, swing_lows)
