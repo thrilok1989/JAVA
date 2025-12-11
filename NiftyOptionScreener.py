@@ -3343,6 +3343,153 @@ def calculate_seller_max_pain(df):
         }
     return None
 
+def seller_bias_direction(chg_oi, prev_ltp, ltp, oi, option_type):
+    """
+    Determines seller bias direction based on OI change and price movement.
+
+    SELLER'S PERSPECTIVE:
+    - For CE (Calls): OI increase = BEARISH (selling calls), OI decrease = BULLISH (covering calls)
+    - For PE (Puts): OI increase = BULLISH (selling puts), OI decrease = BEARISH (covering puts)
+
+    Args:
+        chg_oi: Change in open interest
+        prev_ltp: Previous last traded price
+        ltp: Current last traded price
+        oi: Total open interest
+        option_type: "CE" or "PE"
+
+    Returns:
+        String indicating bias direction (↑ BULLISH, ↓ BEARISH, ⇄ NEUTRAL)
+    """
+    if oi <= 0 or abs(chg_oi) < 100:
+        return "⇄"
+
+    price_change = 0
+    if prev_ltp is not None and prev_ltp > 0:
+        price_change = ltp - prev_ltp
+
+    # Calculate OI change percentage
+    oi_change_pct = (chg_oi / max(oi, 1)) * 100
+
+    if option_type == "CE":
+        # CALL options - Seller's perspective
+        if chg_oi > 0:
+            # Calls being written (BEARISH for sellers)
+            if abs(oi_change_pct) > 10:
+                return "↓↓"  # Strong bearish
+            else:
+                return "↓"   # Bearish
+        elif chg_oi < 0:
+            # Calls being covered (BULLISH for sellers)
+            if abs(oi_change_pct) > 10:
+                return "↑↑"  # Strong bullish
+            else:
+                return "↑"   # Bullish
+    else:  # PE
+        # PUT options - Seller's perspective
+        if chg_oi > 0:
+            # Puts being written (BULLISH for sellers)
+            if abs(oi_change_pct) > 10:
+                return "↑↑"  # Strong bullish
+            else:
+                return "↑"   # Bullish
+        elif chg_oi < 0:
+            # Puts being covered (BEARISH for sellers)
+            if abs(oi_change_pct) > 10:
+                return "↓↓"  # Strong bearish
+            else:
+                return "↓"   # Bearish
+
+    return "⇄"
+
+def calculate_seller_bias_score(merged_df):
+    """
+    Calculate overall seller bias score from merged option chain data.
+    This is a simplified version that analyzes the overall market bias from sellers' perspective.
+
+    Returns:
+        Dictionary with bias, polarity, color, explanation, action
+    """
+    if merged_df.empty:
+        return {
+            "bias": "NEUTRAL ⚖️",
+            "polarity": 0.0,
+            "color": "#66b3ff",
+            "explanation": "No data available",
+            "action": "Wait for data"
+        }
+
+    polarity = 0.0
+
+    # Analyze CE and PE OI changes
+    total_chg_ce = merged_df.get("Chg_OI_CE", pd.Series([0])).sum()
+    total_chg_pe = merged_df.get("Chg_OI_PE", pd.Series([0])).sum()
+    total_oi_ce = merged_df.get("OI_CE", pd.Series([0])).sum()
+    total_oi_pe = merged_df.get("OI_PE", pd.Series([0])).sum()
+
+    # Seller's perspective:
+    # CE building (positive chg_oi) = BEARISH
+    # PE building (positive chg_oi) = BULLISH
+    if total_chg_ce > 0:
+        polarity -= (total_chg_ce / max(total_oi_ce, 1)) * 5.0
+    elif total_chg_ce < 0:
+        polarity += abs(total_chg_ce / max(total_oi_ce, 1)) * 3.0
+
+    if total_chg_pe > 0:
+        polarity += (total_chg_pe / max(total_oi_pe, 1)) * 5.0
+    elif total_chg_pe < 0:
+        polarity -= abs(total_chg_pe / max(total_oi_pe, 1)) * 3.0
+
+    # PCR analysis
+    if total_oi_ce > 0:
+        pcr = total_oi_pe / total_oi_ce
+        if pcr > 1.5:
+            polarity += 1.5
+        elif pcr < 0.7:
+            polarity -= 1.5
+
+    # Return bias based on polarity
+    if polarity > 3.0:
+        return {
+            "bias": "STRONG BULLISH 🚀",
+            "polarity": polarity,
+            "color": "#00ff88",
+            "explanation": "Sellers aggressively WRITING PUTS. Expecting price to STAY ABOVE strikes.",
+            "action": "Bullish breakout likely. Sellers confident in upside."
+        }
+    elif polarity > 1.0:
+        return {
+            "bias": "BULLISH 📈",
+            "polarity": polarity,
+            "color": "#00cc66",
+            "explanation": "Sellers leaning towards PUT writing. Moderate bullish sentiment.",
+            "action": "Expect support to hold. Upside bias."
+        }
+    elif polarity < -3.0:
+        return {
+            "bias": "STRONG BEARISH 🐻",
+            "polarity": polarity,
+            "color": "#ff4444",
+            "explanation": "Sellers aggressively WRITING CALLS. Expecting price to STAY BELOW strikes.",
+            "action": "Bearish breakdown likely. Sellers confident in downside."
+        }
+    elif polarity < -1.0:
+        return {
+            "bias": "BEARISH 📉",
+            "polarity": polarity,
+            "color": "#ff6666",
+            "explanation": "Sellers leaning towards CALL writing. Moderate bearish sentiment.",
+            "action": "Expect resistance to hold. Downside bias."
+        }
+    else:
+        return {
+            "bias": "NEUTRAL ⚖️",
+            "polarity": polarity,
+            "color": "#66b3ff",
+            "explanation": "Balanced option selling. No clear directional bias.",
+            "action": "Range-bound expected. Wait for clearer signals."
+        }
+
 def calculate_seller_market_bias(merged_df, spot, atm_strike):
     polarity = 0.0
     
