@@ -4574,99 +4574,99 @@ def render_nifty_option_screener():
         if telegram_signal:
             # NEW SIGNAL DETECTED
             st.success("🎯 **NEW TRADE SIGNAL GENERATED!**")
-        
-        # Auto-send to Telegram if enabled
-        if auto_send and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
-            with st.spinner("Sending to Telegram..."):
-                success, message = send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, telegram_signal)
-                if success:
-                    st.success(f"✅ {message}")
-                    st.balloons()
-                else:
-                    st.error(f"❌ {message}")
-        
-        # Create a nice display of the signal
-        col_signal1, col_signal2 = st.columns([2, 1])
-        
-        with col_signal1:
-            st.markdown("### 📋 Telegram Signal Ready:")
-            
-            if show_signal_preview:
-                # Display formatted preview
-                st.markdown("""
-                <div style="
-                    background-color: #1a1f2e;
-                    padding: 15px;
-                    border-radius: 10px;
-                    border-left: 4px solid #0088cc;
-                    margin: 10px 0;
-                    font-family: monospace;
-                    white-space: pre-wrap;
-                ">
-                """ + telegram_signal + "</div>", unsafe_allow_html=True)
-            else:
-                st.code(telegram_signal)
-        
-        with col_signal2:
-            st.markdown("### 📤 Send Options:")
-            
-            # Copy to clipboard
-            if st.button("📋 Copy to Clipboard", use_container_width=True, key="copy_clipboard"):
-                st.success("✅ Signal copied to clipboard!")
-                
-            # Manual send to Telegram
-            if st.button("📱 Send to Telegram", use_container_width=True, key="send_telegram"):
-                if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+
+            # Auto-send to Telegram if enabled
+            if auto_send and TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+                with st.spinner("Sending to Telegram..."):
                     success, message = send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, telegram_signal)
                     if success:
                         st.success(f"✅ {message}")
+                        st.balloons()
                     else:
                         st.error(f"❌ {message}")
+
+            # Create a nice display of the signal
+            col_signal1, col_signal2 = st.columns([2, 1])
+
+            with col_signal1:
+                st.markdown("### 📋 Telegram Signal Ready:")
+
+                if show_signal_preview:
+                    # Display formatted preview
+                    st.markdown("""
+                    <div style="
+                        background-color: #1a1f2e;
+                        padding: 15px;
+                        border-radius: 10px;
+                        border-left: 4px solid #0088cc;
+                        margin: 10px 0;
+                        font-family: monospace;
+                        white-space: pre-wrap;
+                    ">
+                    """ + telegram_signal + "</div>", unsafe_allow_html=True)
                 else:
-                    st.warning("Telegram credentials not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to secrets.")
-                
-            # Save to file
-            if st.button("💾 Save to File", use_container_width=True, key="save_file"):
-                filename = f"signal_{get_ist_datetime_str().replace(':', '-').replace(' ', '_')}.txt"
-                with open(filename, 'w') as f:
-                    f.write(telegram_signal)
-                st.success(f"✅ Signal saved to {filename}")
-        
-        # Add signal details
-        with st.expander("📊 View Signal Details", expanded=False):
-            col_details1, col_details2 = st.columns(2)
-            
-            with col_details1:
-                st.markdown("**Position Details:**")
-                st.metric("Type", entry_signal["position_type"])
-                st.metric("Strength", entry_signal["signal_strength"])
-                st.metric("Confidence", f"{entry_signal['confidence']:.0f}%")
-                st.metric("Entry Price", f"₹{entry_signal['optimal_entry_price']:,.2f}")
-            
-            with col_details2:
-                st.markdown("**Risk Management:**")
-                st.metric("Stop Loss", f"₹{entry_signal['stop_loss']:,.2f}" if entry_signal['stop_loss'] else "N/A")
-                st.metric("Target", f"₹{entry_signal['target']:,.2f}" if entry_signal['target'] else "N/A")
-                
-                # Calculate actual risk:reward
-                if entry_signal['stop_loss'] and entry_signal['target']:
-                    if entry_signal["position_type"] == "LONG":
-                        risk = abs(entry_signal['optimal_entry_price'] - entry_signal['stop_loss'])
-                        reward = abs(entry_signal['target'] - entry_signal['optimal_entry_price'])
+                    st.code(telegram_signal)
+
+            with col_signal2:
+                st.markdown("### 📤 Send Options:")
+
+                # Copy to clipboard
+                if st.button("📋 Copy to Clipboard", use_container_width=True, key="copy_clipboard"):
+                    st.success("✅ Signal copied to clipboard!")
+
+                # Manual send to Telegram
+                if st.button("📱 Send to Telegram", use_container_width=True, key="send_telegram"):
+                    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+                        success, message = send_telegram_message(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, telegram_signal)
+                        if success:
+                            st.success(f"✅ {message}")
+                        else:
+                            st.error(f"❌ {message}")
                     else:
-                        risk = abs(entry_signal['stop_loss'] - entry_signal['optimal_entry_price'])
-                        reward = abs(entry_signal['optimal_entry_price'] - entry_signal['target'])
-                    
-                    if risk > 0:
-                        rr_ratio = reward / risk
-                        st.metric("Risk:Reward", f"1:{rr_ratio:.2f}")
-        
-        # Signal timestamp
-        st.caption(f"⏰ Signal generated at: {get_ist_datetime_str()}")
-        
-        # Last signal info
-        if "last_signal" in st.session_state and st.session_state["last_signal"]:
-            st.caption(f"📝 Last signal type: {st.session_state['last_signal']}")
+                        st.warning("Telegram credentials not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID to secrets.")
+
+                # Save to file
+                if st.button("💾 Save to File", use_container_width=True, key="save_file"):
+                    filename = f"signal_{get_ist_datetime_str().replace(':', '-').replace(' ', '_')}.txt"
+                    with open(filename, 'w') as f:
+                        f.write(telegram_signal)
+                    st.success(f"✅ Signal saved to {filename}")
+
+            # Add signal details
+            with st.expander("📊 View Signal Details", expanded=False):
+                col_details1, col_details2 = st.columns(2)
+
+                with col_details1:
+                    st.markdown("**Position Details:**")
+                    st.metric("Type", entry_signal["position_type"])
+                    st.metric("Strength", entry_signal["signal_strength"])
+                    st.metric("Confidence", f"{entry_signal['confidence']:.0f}%")
+                    st.metric("Entry Price", f"₹{entry_signal['optimal_entry_price']:,.2f}")
+
+                with col_details2:
+                    st.markdown("**Risk Management:**")
+                    st.metric("Stop Loss", f"₹{entry_signal['stop_loss']:,.2f}" if entry_signal['stop_loss'] else "N/A")
+                    st.metric("Target", f"₹{entry_signal['target']:,.2f}" if entry_signal['target'] else "N/A")
+
+                    # Calculate actual risk:reward
+                    if entry_signal['stop_loss'] and entry_signal['target']:
+                        if entry_signal["position_type"] == "LONG":
+                            risk = abs(entry_signal['optimal_entry_price'] - entry_signal['stop_loss'])
+                            reward = abs(entry_signal['target'] - entry_signal['optimal_entry_price'])
+                        else:
+                            risk = abs(entry_signal['stop_loss'] - entry_signal['optimal_entry_price'])
+                            reward = abs(entry_signal['optimal_entry_price'] - entry_signal['target'])
+
+                        if risk > 0:
+                            rr_ratio = reward / risk
+                            st.metric("Risk:Reward", f"1:{rr_ratio:.2f}")
+
+            # Signal timestamp
+            st.caption(f"⏰ Signal generated at: {get_ist_datetime_str()}")
+
+            # Last signal info
+            if "last_signal" in st.session_state and st.session_state["last_signal"]:
+                st.caption(f"📝 Last signal type: {st.session_state['last_signal']}")
 
         else:
             # No active signal
