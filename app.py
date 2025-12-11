@@ -4194,10 +4194,6 @@ with tab10:
 
             **Result**: 75-85%+ win rate potential 🎯
             """)
-    except Exception as e:
-        st.error(f"Error in Master AI Analysis: {e}")
-        import traceback
-        st.code(traceback.format_exc())
 
 # ═══════════════════════════════════════════════════════════════════════
 # TAB 11: ADVANCED ANALYTICS
