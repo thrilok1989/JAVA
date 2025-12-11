@@ -14,9 +14,48 @@ class HTFSupportResistance:
     pivot points (support and resistance levels) across multiple timeframes
     """
 
-    def __init__(self):
-        """Initialize HTF Support/Resistance indicator"""
-        pass
+    def __init__(self, timeframes: Optional[List[str]] = None, pivot_length: int = 5):
+        """
+        Initialize HTF Support/Resistance indicator
+
+        Args:
+            timeframes: List of timeframe strings (e.g., ['5T', '15T', '1H'])
+            pivot_length: Lookback period for pivot calculation
+        """
+        self.timeframes = timeframes or ['5T', '15T', '1H']
+        self.pivot_length = pivot_length
+
+    def calculate_levels(self, df: pd.DataFrame) -> List[Dict]:
+        """
+        Calculate support and resistance levels for configured timeframes
+
+        Args:
+            df: DataFrame with OHLC data
+
+        Returns:
+            List of dicts with 'type', 'price', and 'timeframe' keys
+        """
+        levels = []
+
+        for timeframe in self.timeframes:
+            pivot_data = self._calculate_pivot_levels(df, timeframe, self.pivot_length)
+
+            if pivot_data:
+                # Add resistance level
+                levels.append({
+                    'type': 'resistance',
+                    'price': pivot_data['pivot_high'],
+                    'timeframe': timeframe
+                })
+
+                # Add support level
+                levels.append({
+                    'type': 'support',
+                    'price': pivot_data['pivot_low'],
+                    'timeframe': timeframe
+                })
+
+        return levels
 
     def calculate_multi_timeframe(self, df: pd.DataFrame, levels_config: List[Dict]) -> List[Dict]:
         """
