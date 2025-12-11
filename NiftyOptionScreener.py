@@ -50,6 +50,80 @@ def get_ist_datetime_str():
     return get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
 
 # -----------------------
+#  GREEKS CALCULATION
+# -----------------------
+def compute_greeks(spot, strike, tau, risk_free_rate, ltp, option_type):
+    """
+    Calculate option Greeks using Black-Scholes model
+
+    Args:
+        spot: Current spot price
+        strike: Strike price
+        tau: Time to expiry in years
+        risk_free_rate: Risk-free interest rate
+        ltp: Last traded price (premium)
+        option_type: "CE" for Call or "PE" for Put
+
+    Returns:
+        dict with delta, gamma, theta, vega
+    """
+    try:
+        if tau <= 0 or ltp <= 0 or spot <= 0 or strike <= 0:
+            return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+
+        # Calculate implied volatility (simplified - using approximation)
+        # In production, use Newton-Raphson to solve for IV
+        # For now, using a rough estimate based on ATM volatility
+        iv = 0.20  # Default 20% volatility
+
+        # Try to estimate IV from premium
+        if option_type == "CE":
+            intrinsic = max(0, spot - strike)
+        else:
+            intrinsic = max(0, strike - spot)
+
+        time_value = ltp - intrinsic
+        if time_value > 0 and tau > 0:
+            # Rough IV estimate
+            iv = min(2.0, max(0.05, time_value / (spot * sqrt(tau))))
+
+        # Black-Scholes calculations
+        d1 = (log(spot / strike) + (risk_free_rate + 0.5 * iv ** 2) * tau) / (iv * sqrt(tau))
+        d2 = d1 - iv * sqrt(tau)
+
+        # Delta
+        if option_type == "CE":
+            delta = norm.cdf(d1)
+        else:
+            delta = norm.cdf(d1) - 1
+
+        # Gamma (same for calls and puts)
+        gamma = norm.pdf(d1) / (spot * iv * sqrt(tau))
+
+        # Theta
+        if option_type == "CE":
+            theta = (-(spot * norm.pdf(d1) * iv) / (2 * sqrt(tau)) -
+                     risk_free_rate * strike * np.exp(-risk_free_rate * tau) * norm.cdf(d2))
+        else:
+            theta = (-(spot * norm.pdf(d1) * iv) / (2 * sqrt(tau)) +
+                     risk_free_rate * strike * np.exp(-risk_free_rate * tau) * norm.cdf(-d2))
+
+        # Vega (same for calls and puts)
+        vega = spot * norm.pdf(d1) * sqrt(tau)
+
+        # Convert to per-day theta
+        theta_per_day = theta / 365
+
+        return {
+            "delta": round(delta, 4),
+            "gamma": round(gamma, 6),
+            "theta": round(theta_per_day, 4),
+            "vega": round(vega / 100, 4)  # Vega per 1% change in IV
+        }
+    except Exception as e:
+        return {"delta": 0.0, "gamma": 0.0, "theta": 0.0, "vega": 0.0}
+
+# -----------------------
 #  CONFIG
 # -----------------------
 AUTO_REFRESH_SEC = 60
@@ -1219,7 +1293,7 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
                 st.markdown(f"**{metric}**: {emoji} {score:+.1f} - {interpretation}")
 
 
-def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses, sector_rotation_data=None):
+def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_pain, total_gex_net, expiry_spike_data, oi_pcr_metrics, strike_analyses, sector_rotation_data=None, seller_bias_result=None, nearest_sup=None, nearest_res=None, moment_metrics=None, days_to_expiry=None):
     """
     Display a consolidated dashboard of the most important market sentiment indicators
     Organized in a clean tabulation format
@@ -1411,6 +1485,62 @@ def display_overall_market_sentiment_summary(overall_bias, atm_bias, seller_max_
                 st.markdown("**📉 Lagging Sectors:**")
                 for sector in laggards:
                     st.markdown(f"- {sector['sector']}: {sector['change_pct']:+.2f}%")
+
+    st.markdown("---")
+
+    # FINAL ASSESSMENT
+    if seller_bias_result and atm_bias and oi_pcr_metrics:
+        # Prepare ATM bias summary
+        atm_verdict = atm_bias.get("verdict", "N/A")
+        atm_score = atm_bias.get("total_score", 0)
+        atm_bias_summary = f"ATM Bias: {atm_verdict} ({atm_score:.2f} score)"
+
+        # Prepare moment summary
+        if moment_metrics:
+            moment_burst = moment_metrics.get("momentum_burst", {}).get("score", 0)
+            orderbook_pressure = moment_metrics.get("orderbook", {}).get("pressure", 0) if moment_metrics.get("orderbook", {}).get("available") else 0
+            moment_summary = f"Burst: {moment_burst}/100, Pressure: {orderbook_pressure:+.2f}"
+        else:
+            moment_summary = "Moment indicators neutral"
+
+        # Prepare OI/PCR summary
+        oi_pcr_summary = f"PCR: {oi_pcr_metrics['pcr_total']:.2f} ({oi_pcr_metrics['pcr_sentiment']}) | CALL OI: {oi_pcr_metrics['total_ce_oi']:,} | PUT OI: {oi_pcr_metrics['total_pe_oi']:,} | ATM Conc: {oi_pcr_metrics['atm_concentration_pct']:.1f}%"
+
+        # Prepare expiry summary
+        if expiry_spike_data and expiry_spike_data.get('spike_risk_score', 0) > 60:
+            expiry_summary = f"⚠️ HIGH SPIKE RISK ({expiry_spike_data['spike_risk_score']}/100) - {expiry_spike_data.get('spike_type', 'SQUEEZE')}"
+        elif days_to_expiry is not None:
+            expiry_summary = f"Expiry in {days_to_expiry:.1f} days"
+        else:
+            expiry_summary = "Expiry data unavailable"
+
+        # Support and resistance strings
+        support_str = f"₹{nearest_sup['strike']:,}" if nearest_sup else "N/A"
+        resistance_str = f"₹{nearest_res['strike']:,}" if nearest_res else "N/A"
+
+        # Max Pain string
+        max_pain_str = f"₹{seller_max_pain.get('max_pain_strike', 0):,}" if seller_max_pain else "N/A"
+
+        st.markdown(f'''
+        <div style='
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            padding: 25px;
+            border-radius: 12px;
+            border: 3px solid #ffa500;
+            margin-bottom: 20px;
+        '>
+            <h3 style='color: #ffa500; margin-bottom: 15px;'>🎯 FINAL ASSESSMENT (Seller + ATM Bias + Moment + Expiry + OI/PCR)</h3>
+            <p style='margin: 8px 0;'><strong>Market Makers are telling us:</strong> {seller_bias_result["explanation"]}</p>
+            <p style='margin: 8px 0;'><strong>ATM Zone Analysis:</strong> {atm_bias_summary}</p>
+            <p style='margin: 8px 0;'><strong>Their game plan:</strong> {seller_bias_result["action"]}</p>
+            <p style='margin: 8px 0;'><strong>Moment Detector:</strong> {moment_summary}</p>
+            <p style='margin: 8px 0;'><strong>OI/PCR Analysis:</strong> {oi_pcr_summary}</p>
+            <p style='margin: 8px 0;'><strong>Expiry Context:</strong> {expiry_summary}</p>
+            <p style='margin: 8px 0;'><strong>Key defense levels:</strong> {support_str} (Support) | {resistance_str} (Resistance)</p>
+            <p style='margin: 8px 0;'><strong>Max OI Walls:</strong> CALL: ₹{oi_pcr_metrics['max_ce_strike']:,} | PUT: ₹{oi_pcr_metrics['max_pe_strike']:,}</p>
+            <p style='margin: 8px 0;'><strong>Preferred price level:</strong> {max_pain_str} (Max Pain)</p>
+        </div>
+        ''', unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -3428,29 +3558,57 @@ def rank_support_resistance_seller(pcr_df):
 # -----------------------
 # DHAN API
 # -----------------------
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=30)  # Increased cache to 30 seconds to reduce API calls
 def get_nifty_spot_price():
-    try:
-        url = f"{DHAN_BASE_URL}/v2/marketfeed/ltp"
-        payload = {"IDX_I": [13]}
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "access-token": DHAN_ACCESS_TOKEN,
-            "client-id": DHAN_CLIENT_ID
-        }
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        if data.get("status") == "success":
-            idx_data = data.get("data", {}).get("IDX_I", {})
-            nifty_data = idx_data.get("13", {})
-            ltp = nifty_data.get("last_price", 0.0)
-            return float(ltp)
-        return 0.0
-    except Exception as e:
-        st.warning(f"Dhan LTP failed: {e}")
-        return 0.0
+    """Fetch NIFTY spot price with retry logic and rate limiting"""
+    max_retries = 3
+    retry_delays = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
+
+    for attempt in range(max_retries):
+        try:
+            url = f"{DHAN_BASE_URL}/v2/marketfeed/ltp"
+            payload = {"IDX_I": [13]}
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "access-token": DHAN_ACCESS_TOKEN,
+                "client-id": DHAN_CLIENT_ID
+            }
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+
+            # Handle rate limiting
+            if response.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delays[attempt]
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    st.warning(f"⚠️ Dhan API rate limit exceeded. Using cached data if available.")
+                    return 0.0
+
+            response.raise_for_status()
+            data = response.json()
+            if data.get("status") == "success":
+                idx_data = data.get("data", {}).get("IDX_I", {})
+                nifty_data = idx_data.get("13", {})
+                ltp = nifty_data.get("last_price", 0.0)
+                return float(ltp)
+            return 0.0
+        except requests.exceptions.HTTPError as e:
+            if attempt < max_retries - 1 and e.response.status_code == 429:
+                wait_time = retry_delays[attempt]
+                time.sleep(wait_time)
+                continue
+            st.warning(f"⚠️ Dhan LTP failed: {e}")
+            return 0.0
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delays[attempt])
+                continue
+            st.warning(f"⚠️ Dhan LTP failed: {e}")
+            return 0.0
+
+    return 0.0
 
 @st.cache_data(ttl=300)
 def get_expiry_list():
@@ -3473,26 +3631,56 @@ def get_expiry_list():
         st.warning(f"Expiry list failed: {e}")
         return []
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=30)  # Increased cache to 30 seconds to reduce API calls
 def fetch_dhan_option_chain(expiry_date):
-    try:
-        url = f"{DHAN_BASE_URL}/v2/optionchain"
-        payload = {"UnderlyingScrip":13,"UnderlyingSeg":"IDX_I","Expiry":expiry_date}
-        headers = {
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "access-token": DHAN_ACCESS_TOKEN,
-            "client-id": DHAN_CLIENT_ID
-        }
-        r = requests.post(url, json=payload, headers=headers, timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        if data.get("status")=="success":
-            return data.get("data",{})
-        return None
-    except Exception as e:
-        st.warning(f"Option chain failed: {e}")
-        return None
+    """Fetch option chain with retry logic and rate limiting"""
+    max_retries = 3
+    retry_delays = [2, 4, 8]  # Exponential backoff: 2s, 4s, 8s
+
+    for attempt in range(max_retries):
+        try:
+            url = f"{DHAN_BASE_URL}/v2/optionchain"
+            payload = {"UnderlyingScrip":13,"UnderlyingSeg":"IDX_I","Expiry":expiry_date}
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "access-token": DHAN_ACCESS_TOKEN,
+                "client-id": DHAN_CLIENT_ID
+            }
+            r = requests.post(url, json=payload, headers=headers, timeout=15)
+
+            # Handle rate limiting
+            if r.status_code == 429:
+                if attempt < max_retries - 1:
+                    wait_time = retry_delays[attempt]
+                    st.info(f"⏳ Rate limit hit. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    st.warning(f"⚠️ Dhan API rate limit exceeded. Please wait a moment and try again.")
+                    return None
+
+            r.raise_for_status()
+            data = r.json()
+            if data.get("status")=="success":
+                return data.get("data",{})
+            return None
+        except requests.exceptions.HTTPError as e:
+            if attempt < max_retries - 1 and e.response.status_code == 429:
+                wait_time = retry_delays[attempt]
+                st.info(f"⏳ Rate limit hit. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                continue
+            st.warning(f"⚠️ Option chain failed: {e}")
+            return None
+        except Exception as e:
+            if attempt < max_retries - 1:
+                time.sleep(retry_delays[attempt])
+                continue
+            st.warning(f"⚠️ Option chain failed: {e}")
+            return None
+
+    return None
 
 def parse_dhan_option_chain(chain_data):
     if not chain_data:
@@ -4240,6 +4428,11 @@ def render_nifty_option_screener():
         'oi_pcr_metrics': oi_pcr_metrics,
         'strike_analyses': strike_analyses,
         'sector_rotation_data': sector_rotation_data,
+        'seller_bias_result': seller_bias_result,
+        'nearest_sup': nearest_sup,
+        'nearest_res': nearest_res,
+        'moment_metrics': moment_metrics,
+        'days_to_expiry': days_to_expiry,
         'last_updated': datetime.now()
     }
 
@@ -4252,7 +4445,12 @@ def render_nifty_option_screener():
         expiry_spike_data=expiry_spike_data,
         oi_pcr_metrics=oi_pcr_metrics,
         strike_analyses=strike_analyses,
-        sector_rotation_data=sector_rotation_data
+        sector_rotation_data=sector_rotation_data,
+        seller_bias_result=seller_bias_result,
+        nearest_sup=nearest_sup,
+        nearest_res=nearest_res,
+        moment_metrics=moment_metrics,
+        days_to_expiry=days_to_expiry
     )
 
     st.markdown("---")
