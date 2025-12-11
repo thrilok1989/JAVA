@@ -667,9 +667,11 @@ class EnhancedMarketData:
         laggards = sectors_sorted[-3:]  # Bottom 3 performing sectors
 
         # Calculate sector strength score
-        bullish_sectors = [s for s in sectors if s['change_pct'] > 0.5]
-        bearish_sectors = [s for s in sectors if s['change_pct'] < -0.5]
-        neutral_sectors = [s for s in sectors if -0.5 <= s['change_pct'] <= 0.5]
+        # Lowered thresholds from 0.5% to 0.15% for more accurate sector classification
+        # This ensures that sectors with small positive/negative changes are properly classified
+        bullish_sectors = [s for s in sectors if s['change_pct'] >= 0.15]
+        bearish_sectors = [s for s in sectors if s['change_pct'] <= -0.15]
+        neutral_sectors = [s for s in sectors if -0.15 < s['change_pct'] < 0.15]
 
         # Market breadth from sectors
         if len(sectors) > 0:

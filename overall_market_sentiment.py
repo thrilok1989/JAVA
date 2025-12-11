@@ -1356,8 +1356,18 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
 
                     Please navigate to the **"🎯 NIFTY Option Screener v7.0"** tab to load the data manually.
                     """)
+                    # Show detailed error if available
+                    if 'nifty_option_screener_error' in st.session_state:
+                        error_info = st.session_state.nifty_option_screener_error
+                        st.error(f"🔍 Detailed error: {error_info.get('error', 'Unknown error')}")
+                        st.caption(f"Error occurred at: {error_info.get('timestamp', 'Unknown time').strftime('%Y-%m-%d %H:%M:%S IST') if hasattr(error_info.get('timestamp'), 'strftime') else error_info.get('timestamp')}")
             except Exception as e:
                 st.error(f"❌ Error loading option chain data: {e}")
+                # Check if there's a detailed error in session state
+                if 'nifty_option_screener_error' in st.session_state:
+                    error_info = st.session_state.nifty_option_screener_error
+                    st.error(f"🔍 Detailed error: {error_info.get('error', 'Unknown error')}")
+                    st.caption(f"Error occurred at: {error_info.get('timestamp', 'Unknown time').strftime('%Y-%m-%d %H:%M:%S IST') if hasattr(error_info.get('timestamp'), 'strftime') else error_info.get('timestamp')}")
                 st.warning("""
                 ⚠️ **Option Chain Data Not Yet Loaded**
 
