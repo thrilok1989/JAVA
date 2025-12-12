@@ -174,10 +174,10 @@ def calculate_atm_strike_verdict_sentiment():
     if not atm_bias:
         return None
 
-    # Extract ATM verdict and score
+    # Extract ATM verdict and score - FIX: Use correct keys from analyze_atm_bias() structure
     verdict = atm_bias.get('verdict', 'Neutral')
-    strike = atm_bias.get('strike', 0)
-    bias_score = atm_bias.get('score', 0)
+    strike = atm_bias.get('atm_strike', 0)  # FIX: Changed from 'strike' to 'atm_strike'
+    bias_score = atm_bias.get('total_score', 0)  # FIX: Changed from 'score' to 'total_score'
 
     # Determine bias from verdict
     verdict_upper = str(verdict).upper()
@@ -224,10 +224,10 @@ def calculate_pcr_sentiment_from_screener():
     if not oi_pcr_metrics:
         return None
 
-    # Extract PCR sentiment
-    pcr_sentiment = oi_pcr_metrics.get('sentiment', 'NEUTRAL')
-    pcr_description = oi_pcr_metrics.get('description', '')
-    pcr_value = oi_pcr_metrics.get('pcr_value', 1.0)
+    # Extract PCR sentiment - FIX: Use correct keys from analyze_oi_pcr_metrics() structure
+    pcr_sentiment = oi_pcr_metrics.get('pcr_sentiment', 'NEUTRAL')  # FIX: Changed from 'sentiment' to 'pcr_sentiment'
+    pcr_description = oi_pcr_metrics.get('pcr_interpretation', '')  # FIX: Changed from 'description' to 'pcr_interpretation'
+    pcr_value = oi_pcr_metrics.get('pcr_total', 1.0)  # FIX: Changed from 'pcr_value' to 'pcr_total'
 
     # Determine bias and score based on PCR sentiment
     sentiment_upper = str(pcr_sentiment).upper()
@@ -272,10 +272,10 @@ def calculate_sector_rotation_sentiment():
     if not sector_rotation:
         return None
 
-    # Extract sector rotation bias
-    rotation_bias = sector_rotation.get('bias', 'NEUTRAL')
-    rotation_score = sector_rotation.get('score', 0)
-    rotation_description = sector_rotation.get('description', '')
+    # Extract sector rotation bias - FIX: Use correct keys from enhanced_market_data structure
+    rotation_bias = sector_rotation.get('rotation_bias', 'NEUTRAL')
+    rotation_score = sector_rotation.get('rotation_score', 0)
+    rotation_description = sector_rotation.get('rotation_pattern', sector_rotation.get('sector_sentiment', ''))
 
     # Determine bias from rotation bias
     bias_upper = str(rotation_bias).upper()
