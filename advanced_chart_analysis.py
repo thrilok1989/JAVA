@@ -21,6 +21,8 @@ from indicators.ultimate_rsi import UltimateRSI
 from indicators.om_indicator import OMIndicator
 from indicators.liquidity_sentiment_profile import LiquiditySentimentProfile
 from indicators.advanced_price_action import AdvancedPriceAction
+from indicators.money_flow_profile import MoneyFlowProfile
+from indicators.deltaflow_volume_profile import DeltaFlowVolumeProfile
 from dhan_data_fetcher import DhanDataFetcher
 from config import get_dhan_credentials
 
@@ -153,10 +155,12 @@ class AdvancedChartAnalysis:
     def create_advanced_chart(self, df, symbol, show_vob=True, show_htf_sr=True,
                              show_footprint=True, show_rsi=True, show_om=False,
                              show_volume=True, show_liquidity_profile=False,
+                             show_money_flow_profile=False, show_deltaflow_profile=False,
                              show_bos=False, show_choch=False, show_fibonacci=False,
                              show_patterns=False,
                              vob_params=None, htf_params=None, footprint_params=None,
                              rsi_params=None, om_params=None, liquidity_params=None,
+                             money_flow_params=None, deltaflow_params=None,
                              price_action_params=None):
         """
         Create advanced chart with all indicators
@@ -171,12 +175,16 @@ class AdvancedChartAnalysis:
             show_om: Show OM Indicator (comprehensive order flow)
             show_volume: Show Volume bars
             show_liquidity_profile: Show Liquidity Sentiment Profile
+            show_money_flow_profile: Show Money Flow Profile (volume/money flow weighted)
+            show_deltaflow_profile: Show DeltaFlow Volume Profile (delta per price level)
             vob_params: Parameters for Volume Order Blocks indicator
             htf_params: Parameters for HTF Support/Resistance indicator
             footprint_params: Parameters for HTF Volume Footprint indicator
             rsi_params: Parameters for Ultimate RSI indicator
             om_params: Parameters for OM Indicator
             liquidity_params: Parameters for Liquidity Sentiment Profile indicator
+            money_flow_params: Parameters for Money Flow Profile indicator
+            deltaflow_params: Parameters for DeltaFlow Volume Profile indicator
 
         Returns:
             plotly Figure object
@@ -237,6 +245,23 @@ class AdvancedChartAnalysis:
                 else:
                     lsp_indicator = LiquiditySentimentProfile()
 
+            # NEW: Money Flow Profile indicator
+            money_flow_indicator = None
+            if show_money_flow_profile:
+                if money_flow_params:
+                    money_flow_indicator = MoneyFlowProfile(**money_flow_params)
+                else:
+                    # Default: 10 rows as requested by user
+                    money_flow_indicator = MoneyFlowProfile(num_rows=10, lookback=200)
+
+            # NEW: DeltaFlow Volume Profile indicator
+            deltaflow_indicator = None
+            if show_deltaflow_profile:
+                if deltaflow_params:
+                    deltaflow_indicator = DeltaFlowVolumeProfile(**deltaflow_params)
+                else:
+                    deltaflow_indicator = DeltaFlowVolumeProfile(bins=30, lookback=200)
+
             price_action_indicator = None
             if show_bos or show_choch or show_fibonacci or show_patterns:
                 if price_action_params:
@@ -249,6 +274,8 @@ class AdvancedChartAnalysis:
             rsi_data = ultimate_rsi.get_signals(df) if ultimate_rsi else None
             om_data = om_indicator.calculate(df) if om_indicator else None
             lsp_data = lsp_indicator.calculate(df) if lsp_indicator else None
+            money_flow_data = money_flow_indicator.calculate(df) if money_flow_indicator else None
+            deltaflow_data = deltaflow_indicator.calculate(df) if deltaflow_indicator else None
             price_action_data = price_action_indicator.analyze(df) if price_action_indicator else None
         except Exception as e:
             raise Exception(f"Error calculating indicators: {str(e)}")
@@ -362,6 +389,14 @@ class AdvancedChartAnalysis:
         # Add Liquidity Sentiment Profile
         if show_liquidity_profile and lsp_data and lsp_data.get('success'):
             fig = lsp_indicator.add_to_chart(fig, df, lsp_data)
+
+        # NEW: Add Money Flow Profile
+        if show_money_flow_profile and money_flow_data and money_flow_data.get('success'):
+            self._add_money_flow_profile(fig, df, money_flow_data, money_flow_indicator, row=price_row, col=1)
+
+        # NEW: Add DeltaFlow Volume Profile
+        if show_deltaflow_profile and deltaflow_data and deltaflow_data.get('success'):
+            self._add_deltaflow_profile(fig, df, deltaflow_data, deltaflow_indicator, row=price_row, col=1)
 
         # Add Advanced Price Action Features
         if price_action_data and price_action_data.get('success'):
@@ -1384,3 +1419,159 @@ class AdvancedChartAnalysis:
                     bgcolor='purple',
                     row=row, col=col
                 )
+
+    def _add_money_flow_profile(self, fig, df, money_flow_data, indicator, row, col):
+        """Add Money Flow Profile to chart"""
+        if not money_flow_data.get('success'):
+            return
+
+        bins = money_flow_data['bins']
+        poc_price = money_flow_data['poc_price']
+        period_high = money_flow_data['period_high']
+        period_low = money_flow_data['period_low']
+
+        # Get chart time range
+        x_start = df.index[-min(indicator.lookback, len(df))]
+        x_end = df.index[-1]
+
+        # Add POC line if enabled
+        if indicator.show_poc == 'Last(Line)' or indicator.show_poc == 'Last(Zone)':
+            fig.add_shape(
+                type="line",
+                x0=x_start,
+                x1=x_end,
+                y0=poc_price,
+                y1=poc_price,
+                line=dict(color=indicator.poc_color, width=2),
+                name="Money Flow POC",
+                row=row, col=col
+            )
+
+        # Add POC zone if enabled
+        if indicator.show_poc == 'Last(Zone)':
+            poc_bin = next((b for b in bins if b['is_poc']), None)
+            if poc_bin:
+                fig.add_shape(
+                    type="rect",
+                    x0=x_start,
+                    x1=x_end,
+                    y0=poc_bin['lower'],
+                    y1=poc_bin['upper'],
+                    fillcolor='rgba(255, 235, 59, 0.27)',
+                    line=dict(width=0),
+                    layer="below",
+                    row=row, col=col
+                )
+
+        # Add consolidation zones
+        if indicator.show_consolidation:
+            for zone in money_flow_data.get('consolidation_zones', []):
+                fig.add_shape(
+                    type="rect",
+                    x0=x_start,
+                    x1=x_end,
+                    y0=zone['lower'],
+                    y1=zone['upper'],
+                    fillcolor=indicator.consolidation_color,
+                    line=dict(width=0),
+                    layer="below",
+                    row=row, col=col
+                )
+
+        # Add annotation with summary
+        if bins:
+            summary_text = (
+                f"Money Flow Profile<br>"
+                f"POC: {poc_price:.2f}<br>"
+                f"Range: {period_high:.2f} - {period_low:.2f}<br>"
+                f"Bullish: {money_flow_data.get('total_bullish', 0) / money_flow_data.get('total_volume', 1) * 100:.1f}%"
+            )
+            fig.add_annotation(
+                x=x_end,
+                y=period_high,
+                text=summary_text,
+                showarrow=False,
+                font=dict(size=9, color='rgba(255, 235, 59, 0.8)'),
+                bgcolor='rgba(0, 0, 0, 0.6)',
+                bordercolor='rgba(255, 235, 59, 0.5)',
+                borderwidth=1,
+                xanchor='right',
+                yanchor='top',
+                row=row, col=col
+            )
+
+    def _add_deltaflow_profile(self, fig, df, deltaflow_data, indicator, row, col):
+        """Add DeltaFlow Volume Profile to chart"""
+        if not deltaflow_data.get('success'):
+            return
+
+        bins = deltaflow_data['bins']
+        poc_price = deltaflow_data['poc_price']
+        period_high = deltaflow_data['period_high']
+        period_low = deltaflow_data['period_low']
+        overall_delta = deltaflow_data['overall_delta']
+
+        # Get chart time range
+        x_start = df.index[-min(indicator.lookback, len(df))]
+        x_end = df.index[-1]
+
+        # Add POC line if enabled
+        if indicator.show_poc:
+            fig.add_shape(
+                type="line",
+                x0=x_start,
+                x1=x_end,
+                y0=poc_price,
+                y1=poc_price,
+                line=dict(color=indicator.poc_color, width=2, dash='dot'),
+                name="DeltaFlow POC",
+                row=row, col=col
+            )
+
+        # Add horizontal lines for strong delta levels
+        for bin_data in bins:
+            if abs(bin_data['delta_pct']) > 30:  # Strong delta levels
+                # Bullish delta levels (green)
+                if bin_data['delta_pct'] > 30:
+                    fig.add_shape(
+                        type="line",
+                        x0=x_start,
+                        x1=x_end,
+                        y0=bin_data['mid'],
+                        y1=bin_data['mid'],
+                        line=dict(color='rgba(0, 150, 136, 0.3)', width=1, dash='dash'),
+                        row=row, col=col
+                    )
+                # Bearish delta levels (red)
+                elif bin_data['delta_pct'] < -30:
+                    fig.add_shape(
+                        type="line",
+                        x0=x_start,
+                        x1=x_end,
+                        y0=bin_data['mid'],
+                        y1=bin_data['mid'],
+                        line=dict(color='rgba(230, 150, 30, 0.3)', width=1, dash='dash'),
+                        row=row, col=col
+                    )
+
+        # Add annotation with summary
+        delta_sentiment = "BULLISH" if overall_delta > 10 else "BEARISH" if overall_delta < -10 else "NEUTRAL"
+        summary_text = (
+            f"DeltaFlow Profile<br>"
+            f"Sentiment: {delta_sentiment}<br>"
+            f"Delta: {overall_delta:+.1f}%<br>"
+            f"POC: {poc_price:.2f}"
+        )
+        fig.add_annotation(
+            x=x_end,
+            y=period_low,
+            text=summary_text,
+            showarrow=False,
+            font=dict(size=9, color='rgba(0, 183, 255, 0.8)'),
+            bgcolor='rgba(0, 0, 0, 0.6)',
+            bordercolor='rgba(0, 183, 255, 0.5)',
+            borderwidth=1,
+            xanchor='right',
+            yanchor='bottom',
+            row=row, col=col
+        )

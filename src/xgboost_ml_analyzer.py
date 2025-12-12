@@ -48,6 +48,8 @@ class XGBoostMLAnalyzer:
     - Liquidity levels
     - Sentiment scores
     - Market regime features
+    - Money Flow Profile (POC, volume distribution, sentiment)
+    - DeltaFlow Profile (delta per price level, strong buy/sell levels)
     """
 
     def __init__(self):
@@ -89,7 +91,9 @@ class XGBoostMLAnalyzer:
         liquidity_result: Optional[any] = None,
         ml_regime_result: Optional[any] = None,
         sentiment_score: float = 0.0,
-        option_screener_data: Optional[Dict] = None
+        option_screener_data: Optional[Dict] = None,
+        money_flow_signals: Optional[Dict] = None,
+        deltaflow_signals: Optional[Dict] = None
     ) -> pd.DataFrame:
         """
         Extract ALL features from ALL modules into a single feature vector
@@ -193,6 +197,48 @@ class XGBoostMLAnalyzer:
             # Distance to target
             if 'price_current' in features and features['primary_target'] != 0:
                 features['target_distance_pct'] = (liquidity_result.primary_target - features['price_current']) / features['price_current'] * 100
+
+        # ========== MONEY FLOW PROFILE FEATURES ==========
+        if money_flow_signals and money_flow_signals.get('success'):
+            features['mfp_poc_price'] = money_flow_signals['poc_price']
+            features['mfp_bullish_pct'] = money_flow_signals['bullish_volume_pct']
+            features['mfp_bearish_pct'] = money_flow_signals['bearish_volume_pct']
+            features['mfp_distance_from_poc_pct'] = money_flow_signals['distance_from_poc_pct']
+            features['mfp_num_hv_levels'] = len(money_flow_signals['high_volume_levels'])
+            features['mfp_num_lv_levels'] = len(money_flow_signals['low_volume_levels'])
+
+            # Encode sentiment
+            sentiment_map = {"BULLISH": 1, "BEARISH": -1, "NEUTRAL": 0}
+            features['mfp_sentiment'] = sentiment_map.get(money_flow_signals['sentiment'], 0)
+
+            # Encode price position
+            position_map = {"Above POC": 1, "At POC": 0, "Below POC": -1}
+            features['mfp_price_position'] = position_map.get(money_flow_signals['price_position'], 0)
+
+        # ========== DELTAFLOW PROFILE FEATURES ==========
+        if deltaflow_signals and deltaflow_signals.get('success'):
+            features['dfp_overall_delta'] = deltaflow_signals['overall_delta']
+            features['dfp_bull_pct'] = deltaflow_signals['overall_bull_pct']
+            features['dfp_bear_pct'] = deltaflow_signals['overall_bear_pct']
+            features['dfp_poc_price'] = deltaflow_signals['poc_price']
+            features['dfp_distance_from_poc_pct'] = deltaflow_signals['distance_from_poc_pct']
+            features['dfp_num_strong_buy'] = len(deltaflow_signals['strong_buy_levels'])
+            features['dfp_num_strong_sell'] = len(deltaflow_signals['strong_sell_levels'])
+            features['dfp_num_absorption'] = len(deltaflow_signals['absorption_zones'])
+
+            # Encode sentiment
+            sentiment_map = {
+                "STRONG BULLISH": 2,
+                "BULLISH": 1,
+                "NEUTRAL": 0,
+                "BEARISH": -1,
+                "STRONG BEARISH": -2
+            }
+            features['dfp_sentiment'] = sentiment_map.get(deltaflow_signals['sentiment'], 0)
+
+            # Encode price position
+            position_map = {"Above POC": 1, "At POC": 0, "Below POC": -1}
+            features['dfp_price_position'] = position_map.get(deltaflow_signals['price_position'], 0)
 
         # ========== ML REGIME FEATURES ==========
         if ml_regime_result:
