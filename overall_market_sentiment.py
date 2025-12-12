@@ -162,22 +162,31 @@ def calculate_technical_indicators_sentiment(bias_results):
 def calculate_atm_strike_verdict_sentiment():
     """
     Calculate sentiment from ATM Strike Verdict (from Option Screener Tab 0)
-    Uses the atm_bias data displayed on Overall Market Sentiment dashboard
+    Uses the strike_analyses data (ATM strike verdict) displayed on Overall Market Sentiment dashboard
     Returns: dict with sentiment, score, and details
     """
     if 'nifty_option_screener_data' not in st.session_state:
         return None
 
     option_data = st.session_state.nifty_option_screener_data
+    strike_analyses = option_data.get('strike_analyses')
     atm_bias = option_data.get('atm_bias')
 
-    if not atm_bias:
+    if not strike_analyses or not atm_bias:
         return None
 
-    # Extract ATM verdict and score - FIX: Use correct keys from analyze_atm_bias() structure
-    verdict = atm_bias.get('verdict', 'Neutral')
-    strike = atm_bias.get('atm_strike', 0)  # FIX: Changed from 'strike' to 'atm_strike'
-    bias_score = atm_bias.get('total_score', 0)  # FIX: Changed from 'score' to 'total_score'
+    # FIX: Use the ATM strike's verdict from strike_analyses (this is what's displayed in Tab 0)
+    # Find the ATM strike analysis
+    atm_strike = atm_bias.get('atm_strike', 0)
+    atm_analysis = next((a for a in strike_analyses if a.get("strike_price") == atm_strike), None)
+
+    if not atm_analysis:
+        return None
+
+    # Extract the verdict and score from the ATM strike analysis (this matches the display)
+    verdict = atm_analysis.get('verdict', 'Neutral')
+    strike = atm_strike
+    bias_score = atm_analysis.get('total_bias', 0)
 
     # Determine bias from verdict
     verdict_upper = str(verdict).upper()
