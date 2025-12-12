@@ -2771,7 +2771,19 @@ with tab7:
     with col3:
         show_volume = st.checkbox("📊 Volume Bars", value=True, key="show_volume")
         show_om = st.checkbox("🎯 OM Indicator", value=True, key="show_om")
-        show_liquidity_profile = st.checkbox("💧 Liquidity Sentiment Profile", value=True, key="show_liquidity_profile")
+
+    # Volume Profile Indicators
+    st.markdown("**📊 Volume Profile Indicators**")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        show_liquidity_profile = st.checkbox("💧 Liquidity Sentiment Profile", value=False, key="show_liquidity_profile")
+
+    with col2:
+        show_money_flow_profile = st.checkbox("💰 Money Flow Profile", value=True, key="show_money_flow_profile")
+
+    with col3:
+        show_deltaflow_profile = st.checkbox("⚡ DeltaFlow Profile", value=True, key="show_deltaflow_profile")
 
     # Advanced Price Action Indicators
     st.markdown("**🎯 Advanced Price Action**")
@@ -3031,6 +3043,150 @@ with tab7:
             with col3:
                 om_band_distance = st.slider("Band Distance", min_value=1.0, max_value=5.0, value=2.0, step=0.5, key="om_band_distance")
 
+    # Money Flow Profile Settings
+    if show_money_flow_profile:
+        with st.expander("💰 Money Flow Profile Settings", expanded=False):
+            st.markdown("**Profile Configuration**")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                mfp_lookback = st.slider(
+                    "Lookback Length",
+                    min_value=50,
+                    max_value=500,
+                    value=200,
+                    step=50,
+                    help="Lookback period for profile calculation",
+                    key="mfp_lookback"
+                )
+                mfp_num_rows = st.slider(
+                    "Number of Rows",
+                    min_value=5,
+                    max_value=50,
+                    value=10,
+                    step=5,
+                    help="Number of price bins (default: 10)",
+                    key="mfp_num_rows"
+                )
+
+            with col2:
+                mfp_source = st.selectbox(
+                    "Profile Source",
+                    options=["Volume", "Money Flow"],
+                    index=0,
+                    help="Volume or Money Flow (volume × price)",
+                    key="mfp_source"
+                )
+                mfp_sentiment_method = st.selectbox(
+                    "Sentiment Method",
+                    options=["Bar Polarity", "Bar Buying/Selling Pressure"],
+                    index=0,
+                    help="Method to determine bullish vs bearish bars",
+                    key="mfp_sentiment_method"
+                )
+
+            with col3:
+                mfp_show_poc = st.selectbox(
+                    "POC Display",
+                    options=["Last(Zone)", "Last(Line)", "Developing", "None"],
+                    index=0,
+                    help="Point of Control display mode",
+                    key="mfp_show_poc"
+                )
+                mfp_show_consolidation = st.checkbox(
+                    "Show Consolidation Zones",
+                    value=True,
+                    help="Highlight high volume consolidation areas",
+                    key="mfp_show_consolidation"
+                )
+
+            st.markdown("**Volume Thresholds**")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                mfp_hv_threshold = st.slider(
+                    "High Volume %",
+                    min_value=50,
+                    max_value=99,
+                    value=53,
+                    step=1,
+                    key="mfp_hv_threshold"
+                ) / 100.0
+
+            with col2:
+                mfp_lv_threshold = st.slider(
+                    "Low Volume %",
+                    min_value=10,
+                    max_value=40,
+                    value=37,
+                    step=1,
+                    key="mfp_lv_threshold"
+                ) / 100.0
+
+            with col3:
+                mfp_consolidation_threshold = st.slider(
+                    "Consolidation %",
+                    min_value=0,
+                    max_value=100,
+                    value=25,
+                    step=5,
+                    key="mfp_consolidation_threshold"
+                ) / 100.0
+
+    # DeltaFlow Profile Settings
+    if show_deltaflow_profile:
+        with st.expander("⚡ DeltaFlow Profile Settings", expanded=False):
+            st.markdown("**Profile Configuration**")
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                dfp_lookback = st.slider(
+                    "Lookback Length",
+                    min_value=50,
+                    max_value=500,
+                    value=200,
+                    step=50,
+                    help="Lookback period for profile calculation",
+                    key="dfp_lookback"
+                )
+                dfp_bins = st.slider(
+                    "Number of Bins",
+                    min_value=10,
+                    max_value=100,
+                    value=30,
+                    step=10,
+                    help="Number of price bins for delta analysis",
+                    key="dfp_bins"
+                )
+
+            with col2:
+                dfp_show_poc = st.checkbox(
+                    "Show POC Line",
+                    value=True,
+                    help="Display Point of Control line",
+                    key="dfp_show_poc"
+                )
+                dfp_show_delta_heatmap = st.checkbox(
+                    "Show Delta Heatmap",
+                    value=True,
+                    help="Color bins by delta strength",
+                    key="dfp_show_delta_heatmap"
+                )
+
+            with col3:
+                dfp_show_delta_display = st.checkbox(
+                    "Show Delta Labels",
+                    value=True,
+                    help="Display delta percentage per level",
+                    key="dfp_show_delta_display"
+                )
+                dfp_show_volume_bars = st.checkbox(
+                    "Show Volume Bars",
+                    value=True,
+                    help="Display buy/sell volume bars per bin",
+                    key="dfp_show_volume_bars"
+                )
+
     st.divider()
 
     # Display chart if data is available
@@ -3098,6 +3254,27 @@ with tab7:
                     'lv_threshold': lsp_lv_threshold if show_liquidity_profile else 0.21
                 } if show_liquidity_profile else None
 
+                money_flow_params = {
+                    'lookback': mfp_lookback if show_money_flow_profile else 200,
+                    'num_rows': mfp_num_rows if show_money_flow_profile else 10,
+                    'profile_source': mfp_source if show_money_flow_profile else 'Volume',
+                    'sentiment_method': mfp_sentiment_method if show_money_flow_profile else 'Bar Polarity',
+                    'show_poc': mfp_show_poc if show_money_flow_profile else 'Last(Zone)',
+                    'show_consolidation': mfp_show_consolidation if show_money_flow_profile else True,
+                    'hv_threshold': mfp_hv_threshold if show_money_flow_profile else 0.53,
+                    'lv_threshold': mfp_lv_threshold if show_money_flow_profile else 0.37,
+                    'consolidation_threshold': mfp_consolidation_threshold if show_money_flow_profile else 0.25
+                } if show_money_flow_profile else None
+
+                deltaflow_params = {
+                    'lookback': dfp_lookback if show_deltaflow_profile else 200,
+                    'bins': dfp_bins if show_deltaflow_profile else 30,
+                    'show_poc': dfp_show_poc if show_deltaflow_profile else True,
+                    'show_delta_heatmap': dfp_show_delta_heatmap if show_deltaflow_profile else True,
+                    'show_delta_display': dfp_show_delta_display if show_deltaflow_profile else True,
+                    'show_volume_bars': dfp_show_volume_bars if show_deltaflow_profile else True
+                } if show_deltaflow_profile else None
+
                 # Create chart with selected indicators
                 chart_analyzer = get_advanced_chart_analyzer()
                 fig = chart_analyzer.create_advanced_chart(
@@ -3110,6 +3287,8 @@ with tab7:
                     show_om=show_om,
                     show_volume=show_volume,
                     show_liquidity_profile=show_liquidity_profile,
+                    show_money_flow_profile=show_money_flow_profile,
+                    show_deltaflow_profile=show_deltaflow_profile,
                     show_bos=show_bos,
                     show_choch=show_choch,
                     show_fibonacci=show_fibonacci,
@@ -3119,7 +3298,9 @@ with tab7:
                     footprint_params=footprint_params,
                     rsi_params=rsi_params,
                     om_params=om_params,
-                    liquidity_params=liquidity_params
+                    liquidity_params=liquidity_params,
+                    money_flow_params=money_flow_params,
+                    deltaflow_params=deltaflow_params
                 )
 
                 # Display chart
