@@ -529,7 +529,32 @@ def analyze_atm_bias(merged_df, spot, atm_strike, strike_gap):
             bias_scores["OI_Change_Bias"] = 0
             bias_interpretations["OI_Change_Bias"] = "Slow OI changes"
             bias_emojis["OI_Change_Bias"] = "⚖️ Neutral"
-    
+
+    # 12. PCR (PUT-CALL RATIO) BIAS
+    # Calculate PCR for ATM window
+    pcr_atm = total_pe_oi_atm / max(total_ce_oi_atm, 1)
+
+    if pcr_atm > 1.5:
+        bias_scores["PCR_Bias"] = 1
+        bias_interpretations["PCR_Bias"] = f"High PCR ({pcr_atm:.2f}) → Strong bullish (PUT writing)"
+        bias_emojis["PCR_Bias"] = "🐂 Bullish"
+    elif pcr_atm > 1.2:
+        bias_scores["PCR_Bias"] = 0.5
+        bias_interpretations["PCR_Bias"] = f"Elevated PCR ({pcr_atm:.2f}) → Mild bullish"
+        bias_emojis["PCR_Bias"] = "🐂 Bullish"
+    elif pcr_atm < 0.7:
+        bias_scores["PCR_Bias"] = -1
+        bias_interpretations["PCR_Bias"] = f"Low PCR ({pcr_atm:.2f}) → Strong bearish (CALL writing)"
+        bias_emojis["PCR_Bias"] = "🐻 Bearish"
+    elif pcr_atm < 0.9:
+        bias_scores["PCR_Bias"] = -0.5
+        bias_interpretations["PCR_Bias"] = f"Below-normal PCR ({pcr_atm:.2f}) → Mild bearish"
+        bias_emojis["PCR_Bias"] = "🐻 Bearish"
+    else:
+        bias_scores["PCR_Bias"] = 0
+        bias_interpretations["PCR_Bias"] = f"Balanced PCR ({pcr_atm:.2f})"
+        bias_emojis["PCR_Bias"] = "⚖️ Neutral"
+
     # Calculate final bias score
     total_score = sum(bias_scores.values())
     normalized_score = total_score / len(bias_scores) if bias_scores else 0
@@ -883,7 +908,7 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
 
 def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     """
-    Calculate 11 bias metrics for a single strike
+    Calculate 12 bias metrics for a single strike
     Returns: dict with bias scores, emojis, and interpretations for one strike
     """
     bias_scores = {}
@@ -1111,6 +1136,7 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
 def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
     """
     Create tabulation for ATM ±2 strikes with 12 bias metrics each
+    (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR)
     Returns: list of strike analyses
     """
     strike_analyses = []
@@ -3021,6 +3047,57 @@ def compute_oi_velocity_acceleration(history, atm_strike, window_strikes=3):
 # ============================================
 # 🎯 MARKET DEPTH ANALYZER (NEW)
 # ============================================
+
+def get_option_contract_depth(security_id_ce, security_id_pe, exchange_segment="NSE_FNO"):
+    """
+    Fetch market depth for CE and PE contracts
+    Returns: dict with CE and PE depth data
+    """
+    try:
+        url = f"{DHAN_BASE_URL}/v2/marketfeed/quote"
+        payload = {exchange_segment: [int(security_id_ce), int(security_id_pe)]}
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "access-token": DHAN_ACCESS_TOKEN,
+            "client-id": DHAN_CLIENT_ID
+        }
+
+        response = requests.post(url, json=payload, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if data.get("status") == "success":
+                segment_data = data.get("data", {}).get(exchange_segment, {})
+
+                ce_data = segment_data.get(str(security_id_ce), {})
+                pe_data = segment_data.get(str(security_id_pe), {})
+
+                ce_depth = ce_data.get("depth", {})
+                pe_depth = pe_data.get("depth", {})
+
+                if ce_depth and pe_depth:
+                    # Calculate bid/ask quantities
+                    ce_bid_qty = sum(level.get("quantity", 0) for level in ce_depth.get("buy", []))
+                    ce_ask_qty = sum(level.get("quantity", 0) for level in ce_depth.get("sell", []))
+                    pe_bid_qty = sum(level.get("quantity", 0) for level in pe_depth.get("buy", []))
+                    pe_ask_qty = sum(level.get("quantity", 0) for level in pe_depth.get("sell", []))
+
+                    return {
+                        "available": True,
+                        "ce_bid_qty": ce_bid_qty,
+                        "ce_ask_qty": ce_ask_qty,
+                        "pe_bid_qty": pe_bid_qty,
+                        "pe_ask_qty": pe_ask_qty,
+                        "ce_total": ce_bid_qty + ce_ask_qty,
+                        "pe_total": pe_bid_qty + pe_ask_qty
+                    }
+
+    except Exception as e:
+        pass
+
+    return {"available": False}
 
 def get_market_depth_dhan():
     """
