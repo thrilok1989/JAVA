@@ -11,4 +11,3 @@ yfinance
 groq
 supabase
 python-dotenv
-websocket-client
