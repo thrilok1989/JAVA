@@ -3022,38 +3022,149 @@ def compute_oi_velocity_acceleration(history, atm_strike, window_strikes=3):
 # 🎯 MARKET DEPTH ANALYZER (NEW)
 # ============================================
 
-def get_market_depth_nse(limit=20):
+def parse_dhan_depth_binary(binary_data, num_levels=20):
     """
-    Fetch Nifty market depth from NSE or alternative source
+    Parse Dhan 20-level depth binary packet
+
+    Binary Structure:
+    - Header: 12 bytes
+    - Bid/Ask Data: 20 packets of 16 bytes each
+
+    Each 16-byte packet:
+    - Price: 8 bytes (float64)
+    - Quantity: 4 bytes (uint32)
+    - Orders: 4 bytes (uint32)
+    """
+    import struct
+
+    depth_list = []
+
+    # Skip 12-byte header, start from byte 12
+    offset = 12
+
+    for i in range(num_levels):
+        if offset + 16 > len(binary_data):
+            break
+
+        # Unpack 16 bytes: 1 double (8 bytes) + 2 unsigned ints (4 bytes each)
+        packet = binary_data[offset:offset+16]
+
+        try:
+            # '<' = little-endian, 'd' = double (8 bytes), 'I' = unsigned int (4 bytes)
+            price, quantity, orders = struct.unpack('<dII', packet)
+
+            if price > 0:  # Only add valid price levels
+                depth_list.append({
+                    "price": round(price, 2),
+                    "quantity": int(quantity),
+                    "orders": int(orders)
+                })
+        except:
+            pass
+
+        offset += 16
+
+    return depth_list
+
+def get_market_depth_dhan(limit=20):
+    """
+    Fetch Nifty 20-level market depth from Dhan WebSocket
     Returns: dict with bid/ask depth
     """
     try:
-        # Using NSE API as alternative to Dhan for depth
-        url = "https://www.nseindia.com/api/quote-equity?symbol=NIFTY"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.nseindia.com/get-quotes/equity"
-        }
+        import websocket
+        import json
+        import time
 
-        response = requests.get(url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            data = response.json()
-            depth_data = data.get("marketDeptOrderBook", {})
+        # WebSocket URL with credentials
+        ws_url = f"wss://depth-api-feed.dhan.co/twentydepth?token={DHAN_ACCESS_TOKEN}&clientId={DHAN_CLIENT_ID}&authType=2"
 
-            if depth_data:
-                return {
-                    "bid": depth_data.get("buy", []),
-                    "ask": depth_data.get("sell", []),
-                    "total_bid_qty": sum(item.get("quantity", 0) for item in depth_data.get("buy", [])),
-                    "total_ask_qty": sum(item.get("quantity", 0) for item in depth_data.get("sell", [])),
-                    "source": "NSE"
-                }
+        # Storage for depth data
+        depth_data = {"bid": [], "ask": []}
+        received_bid = False
+        received_ask = False
+
+        def on_message(ws, message):
+            nonlocal received_bid, received_ask
+
+            if isinstance(message, bytes):
+                # Parse binary response
+                if len(message) < 12:
+                    return
+
+                # Read response code from header (byte 2)
+                response_code = message[2]
+
+                if response_code == 41:  # Bid data
+                    depth_data["bid"] = parse_dhan_depth_binary(message, num_levels=limit)
+                    received_bid = True
+                elif response_code == 51:  # Ask data
+                    depth_data["ask"] = parse_dhan_depth_binary(message, num_levels=limit)
+                    received_ask = True
+
+                # Close connection after receiving both bid and ask
+                if received_bid and received_ask:
+                    ws.close()
+
+        def on_error(ws, error):
+            pass  # Silently handle errors
+
+        def on_open(ws):
+            # Subscribe to NIFTY 20-level depth
+            subscription = {
+                "RequestCode": 23,
+                "InstrumentCount": 1,
+                "InstrumentList": [
+                    {
+                        "ExchangeSegment": "IDX_I",
+                        "SecurityId": "13"
+                    }
+                ]
+            }
+            ws.send(json.dumps(subscription))
+
+        # Create WebSocket connection
+        ws = websocket.WebSocketApp(
+            ws_url,
+            on_message=on_message,
+            on_error=on_error,
+            on_open=on_open
+        )
+
+        # Run WebSocket with timeout
+        import threading
+        wst = threading.Thread(target=ws.run_forever)
+        wst.daemon = True
+        wst.start()
+
+        # Wait for data (max 5 seconds)
+        timeout = 5
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            if received_bid and received_ask:
+                break
+            time.sleep(0.1)
+
+        # Close if still running
+        ws.close()
+
+        if depth_data["bid"] and depth_data["ask"]:
+            total_bid_qty = sum(item["quantity"] for item in depth_data["bid"])
+            total_ask_qty = sum(item["quantity"] for item in depth_data["ask"])
+
+            return {
+                "bid": depth_data["bid"],
+                "ask": depth_data["ask"],
+                "total_bid_qty": total_bid_qty,
+                "total_ask_qty": total_ask_qty,
+                "source": "DHAN_20LEVEL"
+            }
+
     except Exception as e:
-        st.warning(f"Depth fetch failed: {e}")
+        # Fallback to simulated depth
+        pass
 
-    # Fallback: Simulated depth if API fails
+    # Fallback: Simulated depth if WebSocket fails
     return generate_simulated_depth()
 
 def generate_simulated_depth():
@@ -4869,11 +4980,11 @@ def render_nifty_option_screener():
     # 📊 MARKET DEPTH ANALYZER (NEW)
     # ============================================
 
-    # Fetch market depth
-    depth_data = get_market_depth_nse(limit=15)
+    # Fetch market depth from Dhan 20-level API
+    depth_data = get_market_depth_dhan(limit=20)
 
-    # Analyze depth
-    depth_analysis = analyze_market_depth(depth_data, spot, levels=10)
+    # Analyze depth (use all 20 levels)
+    depth_analysis = analyze_market_depth(depth_data, spot, levels=20)
 
     # Generate depth-based signals
     depth_signals = calculate_depth_based_signals(depth_analysis, spot)
