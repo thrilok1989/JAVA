@@ -3022,36 +3022,71 @@ def compute_oi_velocity_acceleration(history, atm_strike, window_strikes=3):
 # 🎯 MARKET DEPTH ANALYZER (NEW)
 # ============================================
 
-def get_market_depth_nse(limit=20):
+def get_market_depth_dhan():
     """
-    Fetch Nifty market depth from NSE or alternative source
+    Fetch Nifty 5-level market depth from Dhan REST API
+    Much simpler and more reliable than WebSocket for snapshot data
     Returns: dict with bid/ask depth
     """
     try:
-        # Using NSE API as alternative to Dhan for depth
-        url = "https://www.nseindia.com/api/quote-equity?symbol=NIFTY"
+        url = f"{DHAN_BASE_URL}/v2/marketfeed/quote"
+        payload = {"IDX_I": [13]}  # NIFTY Index
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "application/json",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://www.nseindia.com/get-quotes/equity"
+            "Content-Type": "application/json",
+            "access-token": DHAN_ACCESS_TOKEN,
+            "client-id": DHAN_CLIENT_ID
         }
 
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+
         if response.status_code == 200:
             data = response.json()
-            depth_data = data.get("marketDeptOrderBook", {})
 
-            if depth_data:
-                return {
-                    "bid": depth_data.get("buy", []),
-                    "ask": depth_data.get("sell", []),
-                    "total_bid_qty": sum(item.get("quantity", 0) for item in depth_data.get("buy", [])),
-                    "total_ask_qty": sum(item.get("quantity", 0) for item in depth_data.get("sell", [])),
-                    "source": "NSE"
-                }
+            if data.get("status") == "success":
+                idx_data = data.get("data", {}).get("IDX_I", {})
+                nifty_data = idx_data.get("13", {})
+                depth = nifty_data.get("depth", {})
+
+                if depth:
+                    bid_levels = depth.get("buy", [])
+                    ask_levels = depth.get("sell", [])
+
+                    # Convert to our format
+                    bids = []
+                    asks = []
+
+                    for level in bid_levels:
+                        if level.get("price", 0) > 0:  # Only valid levels
+                            bids.append({
+                                "price": float(level.get("price", 0)),
+                                "quantity": int(level.get("quantity", 0)),
+                                "orders": int(level.get("orders", 0))
+                            })
+
+                    for level in ask_levels:
+                        if level.get("price", 0) > 0:  # Only valid levels
+                            asks.append({
+                                "price": float(level.get("price", 0)),
+                                "quantity": int(level.get("quantity", 0)),
+                                "orders": int(level.get("orders", 0))
+                            })
+
+                    if bids and asks:
+                        total_bid_qty = sum(item["quantity"] for item in bids)
+                        total_ask_qty = sum(item["quantity"] for item in asks)
+
+                        return {
+                            "bid": bids,
+                            "ask": asks,
+                            "total_bid_qty": total_bid_qty,
+                            "total_ask_qty": total_ask_qty,
+                            "source": "DHAN_5LEVEL"
+                        }
+
     except Exception as e:
-        st.warning(f"Depth fetch failed: {e}")
+        # Fallback to simulated depth
+        pass
 
     # Fallback: Simulated depth if API fails
     return generate_simulated_depth()
@@ -3284,6 +3319,8 @@ def enhanced_orderbook_pressure(depth_analysis, spot):
         "factors": factors,
         "total_bid_qty": depth_analysis["total_bid_qty"],
         "total_ask_qty": depth_analysis["total_ask_qty"],
+        "buy_qty": float(depth_analysis["total_bid_qty"]),  # Backward compatibility
+        "sell_qty": float(depth_analysis["total_ask_qty"]),  # Backward compatibility
         "best_bid": depth_analysis["best_bid"],
         "best_ask": depth_analysis["best_ask"],
         "spread": depth_analysis["spread"],
@@ -4867,11 +4904,11 @@ def render_nifty_option_screener():
     # 📊 MARKET DEPTH ANALYZER (NEW)
     # ============================================
 
-    # Fetch market depth
-    depth_data = get_market_depth_nse(limit=15)
+    # Fetch market depth from Dhan REST API (5-level depth)
+    depth_data = get_market_depth_dhan()
 
-    # Analyze depth
-    depth_analysis = analyze_market_depth(depth_data, spot, levels=10)
+    # Analyze depth (5 levels from Dhan API)
+    depth_analysis = analyze_market_depth(depth_data, spot, levels=5)
 
     # Generate depth-based signals
     depth_signals = calculate_depth_based_signals(depth_analysis, spot)
