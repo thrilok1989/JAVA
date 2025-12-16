@@ -3284,6 +3284,8 @@ def enhanced_orderbook_pressure(depth_analysis, spot):
         "factors": factors,
         "total_bid_qty": depth_analysis["total_bid_qty"],
         "total_ask_qty": depth_analysis["total_ask_qty"],
+        "buy_qty": float(depth_analysis["total_bid_qty"]),  # Backward compatibility
+        "sell_qty": float(depth_analysis["total_ask_qty"]),  # Backward compatibility
         "best_bid": depth_analysis["best_bid"],
         "best_ask": depth_analysis["best_ask"],
         "spread": depth_analysis["spread"],
