@@ -3352,6 +3352,10 @@ with tab7:
                     indicator_tabs.append("🎯 OM Indicator")
                 if show_liquidity_profile:
                     indicator_tabs.append("💧 Liquidity Profile")
+                if show_money_flow_profile:
+                    indicator_tabs.append("💰 Money Flow Profile")
+                if show_deltaflow_profile:
+                    indicator_tabs.append("⚡ DeltaFlow Profile")
                 if show_bos or show_choch or show_fibonacci or show_patterns:
                     indicator_tabs.append("🎯 Price Action")
 
@@ -3405,6 +3409,18 @@ with tab7:
                             from indicators.ultimate_rsi import UltimateRSI
                             rsi_for_regime = UltimateRSI(**rsi_params) if rsi_params else UltimateRSI()
                             regime_indicator_data['rsi'] = rsi_for_regime.get_signals(df_stats)
+
+                        # Money Flow Profile data
+                        if show_money_flow_profile:
+                            from indicators.money_flow_profile import MoneyFlowProfile
+                            mfp_for_regime = MoneyFlowProfile(**money_flow_params) if money_flow_params else MoneyFlowProfile(num_rows=10)
+                            regime_indicator_data['money_flow_profile'] = mfp_for_regime.get_signals(df_stats)
+
+                        # DeltaFlow Profile data
+                        if show_deltaflow_profile:
+                            from indicators.deltaflow_volume_profile import DeltaFlowVolumeProfile
+                            dfp_for_regime = DeltaFlowVolumeProfile(**deltaflow_params) if deltaflow_params else DeltaFlowVolumeProfile(bins=30)
+                            regime_indicator_data['deltaflow_profile'] = dfp_for_regime.get_signals(df_stats)
 
                         # Detect regime
                         regime_detector = MarketRegimeDetector()
@@ -3776,6 +3792,242 @@ with tab7:
                                         st.metric("Low Volume Node", f"₹{lsp_data['low_volume_node']:.2f}")
                             else:
                                 st.info("No liquidity profile data available")
+                        tab_idx += 1
+
+                    # Money Flow Profile Data
+                    if show_money_flow_profile:
+                        with tabs[tab_idx]:
+                            from indicators.money_flow_profile import MoneyFlowProfile
+                            mfp_indicator = MoneyFlowProfile(**money_flow_params) if money_flow_params else MoneyFlowProfile(num_rows=10)
+                            mfp_signals = mfp_indicator.get_signals(df_stats)
+
+                            st.markdown("#### 💰 Money Flow Profile Analysis")
+
+                            if mfp_signals.get('success'):
+                                # Key metrics
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric("Sentiment", mfp_signals['sentiment'])
+                                with col2:
+                                    st.metric("POC Price", f"₹{mfp_signals['poc_price']:.2f}")
+                                with col3:
+                                    st.metric("Bullish Volume", f"{mfp_signals['bullish_volume_pct']:.1f}%")
+                                with col4:
+                                    st.metric("Bearish Volume", f"{mfp_signals['bearish_volume_pct']:.1f}%")
+
+                                st.divider()
+
+                                # Price position
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric(
+                                        "Current Price",
+                                        f"₹{mfp_signals['current_price']:.2f}",
+                                        delta=f"{mfp_signals['distance_from_poc']:+.2f} from POC"
+                                    )
+                                with col2:
+                                    st.metric("Position", mfp_signals['price_position'])
+
+                                # Volume levels
+                                st.divider()
+                                col1, col2 = st.columns(2)
+
+                                with col1:
+                                    st.markdown("**🔥 High Volume Levels (Consolidation)**")
+                                    if mfp_signals['high_volume_levels']:
+                                        hv_data = []
+                                        for level in mfp_signals['high_volume_levels']:
+                                            hv_data.append({
+                                                'Price': f"₹{level:.2f}",
+                                                'Type': '🟡 Value Area'
+                                            })
+                                        st.dataframe(pd.DataFrame(hv_data), use_container_width=True, hide_index=True)
+                                    else:
+                                        st.info("No high volume levels detected")
+
+                                with col2:
+                                    st.markdown("**⚡ Low Volume Levels (Supply/Demand)**")
+                                    if mfp_signals['low_volume_levels']:
+                                        lv_data = []
+                                        for level in mfp_signals['low_volume_levels']:
+                                            lv_data.append({
+                                                'Price': f"₹{level:.2f}",
+                                                'Type': '🔵 Breakout Zone'
+                                            })
+                                        st.dataframe(pd.DataFrame(lv_data), use_container_width=True, hide_index=True)
+                                    else:
+                                        st.info("No low volume levels detected")
+
+                                # Consolidation zones
+                                if mfp_signals.get('consolidation_zones'):
+                                    st.divider()
+                                    st.markdown("**📊 Consolidation Zones**")
+                                    cz_data = []
+                                    for zone in mfp_signals['consolidation_zones']:
+                                        cz_data.append({
+                                            'Lower': f"₹{zone['lower']:.2f}",
+                                            'Upper': f"₹{zone['upper']:.2f}",
+                                            'Range': f"₹{zone['upper'] - zone['lower']:.2f}"
+                                        })
+                                    st.dataframe(pd.DataFrame(cz_data), use_container_width=True, hide_index=True)
+
+                                # Trading insights
+                                st.divider()
+                                st.markdown("**💡 Trading Insights**")
+                                insights = []
+                                if mfp_signals['sentiment'] == 'BULLISH':
+                                    insights.append("🟢 Strong bullish volume dominance - Look for dip buying opportunities")
+                                elif mfp_signals['sentiment'] == 'BEARISH':
+                                    insights.append("🔴 Strong bearish volume dominance - Look for short opportunities")
+                                else:
+                                    insights.append("🟡 Neutral sentiment - Wait for clearer direction")
+
+                                if mfp_signals['price_position'] == 'Above POC':
+                                    insights.append("📈 Price above POC - Bulls in control, POC acts as support")
+                                elif mfp_signals['price_position'] == 'Below POC':
+                                    insights.append("📉 Price below POC - Bears in control, POC acts as resistance")
+
+                                for insight in insights:
+                                    st.info(insight)
+
+                            else:
+                                st.error(f"Error: {mfp_signals.get('error', 'Unknown error')}")
+                        tab_idx += 1
+
+                    # DeltaFlow Profile Data
+                    if show_deltaflow_profile:
+                        with tabs[tab_idx]:
+                            from indicators.deltaflow_volume_profile import DeltaFlowVolumeProfile
+                            dfp_indicator = DeltaFlowVolumeProfile(**deltaflow_params) if deltaflow_params else DeltaFlowVolumeProfile(bins=30)
+                            dfp_signals = dfp_indicator.get_signals(df_stats)
+
+                            st.markdown("#### ⚡ DeltaFlow Volume Profile Analysis")
+
+                            if dfp_signals.get('success'):
+                                # Key metrics
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    sentiment_emoji = "🟢" if "BULLISH" in dfp_signals['sentiment'] else "🔴" if "BEARISH" in dfp_signals['sentiment'] else "🟡"
+                                    st.metric("Sentiment", f"{sentiment_emoji} {dfp_signals['sentiment']}")
+                                with col2:
+                                    delta_color = "normal" if abs(dfp_signals['overall_delta']) < 10 else "inverse" if dfp_signals['overall_delta'] < 0 else "off"
+                                    st.metric("Overall Delta", f"{dfp_signals['overall_delta']:+.1f}%", delta_color=delta_color)
+                                with col3:
+                                    st.metric("Buy Volume", f"{dfp_signals['overall_bull_pct']:.1f}%")
+                                with col4:
+                                    st.metric("Sell Volume", f"{dfp_signals['overall_bear_pct']:.1f}%")
+
+                                st.divider()
+
+                                # POC and position
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric(
+                                        "POC Price",
+                                        f"₹{dfp_signals['poc_price']:.2f}",
+                                        help="Point of Control - Highest volume price level"
+                                    )
+                                with col2:
+                                    st.metric(
+                                        "Distance from POC",
+                                        f"{dfp_signals['distance_from_poc_pct']:+.2f}%",
+                                        help=f"Position: {dfp_signals['price_position']}"
+                                    )
+
+                                # Delta levels
+                                st.divider()
+                                col1, col2 = st.columns(2)
+
+                                with col1:
+                                    st.markdown("**🟢 Strong Buy Levels (Delta > +30%)**")
+                                    if dfp_signals['strong_buy_levels']:
+                                        buy_data = []
+                                        for level in dfp_signals['strong_buy_levels']:
+                                            buy_data.append({
+                                                'Price': f"₹{level['price']:.2f}",
+                                                'Delta': f"{level['delta']:+.1f}%",
+                                                'Strength': '🟢' * min(5, int(abs(level['delta']) / 10))
+                                            })
+                                        st.dataframe(pd.DataFrame(buy_data), use_container_width=True, hide_index=True)
+                                    else:
+                                        st.info("No strong buy levels detected")
+
+                                with col2:
+                                    st.markdown("**🔴 Strong Sell Levels (Delta < -30%)**")
+                                    if dfp_signals['strong_sell_levels']:
+                                        sell_data = []
+                                        for level in dfp_signals['strong_sell_levels']:
+                                            sell_data.append({
+                                                'Price': f"₹{level['price']:.2f}",
+                                                'Delta': f"{level['delta']:+.1f}%",
+                                                'Strength': '🔴' * min(5, int(abs(level['delta']) / 10))
+                                            })
+                                        st.dataframe(pd.DataFrame(sell_data), use_container_width=True, hide_index=True)
+                                    else:
+                                        st.info("No strong sell levels detected")
+
+                                # Absorption zones
+                                if dfp_signals['absorption_zones']:
+                                    st.divider()
+                                    st.markdown("**🛡️ Absorption Zones (High Volume, Low Delta)**")
+                                    st.caption("Areas where large orders are being absorbed - potential reversal zones")
+                                    az_data = []
+                                    for zone in dfp_signals['absorption_zones']:
+                                        az_data.append({
+                                            'Lower': f"₹{zone['lower']:.2f}",
+                                            'Upper': f"₹{zone['upper']:.2f}",
+                                            'Volume': f"{zone['volume']:,.0f}",
+                                            'Significance': '🛡️🛡️🛡️'
+                                        })
+                                    st.dataframe(pd.DataFrame(az_data), use_container_width=True, hide_index=True)
+
+                                # Delta distribution summary
+                                dfp_summary = dfp_indicator.get_delta_levels_summary(df_stats)
+                                if dfp_summary.get('success'):
+                                    st.divider()
+                                    st.markdown("**📊 Delta Distribution Across Price Levels**")
+                                    col1, col2, col3, col4, col5 = st.columns(5)
+                                    with col1:
+                                        st.metric("Strong Buy Bins", f"{dfp_summary['strong_buy']}")
+                                    with col2:
+                                        st.metric("Moderate Buy", f"{dfp_summary['moderate_buy']}")
+                                    with col3:
+                                        st.metric("Neutral", f"{dfp_summary['neutral']}")
+                                    with col4:
+                                        st.metric("Moderate Sell", f"{dfp_summary['moderate_sell']}")
+                                    with col5:
+                                        st.metric("Strong Sell Bins", f"{dfp_summary['strong_sell']}")
+
+                                # Trading insights
+                                st.divider()
+                                st.markdown("**💡 Trading Insights**")
+                                insights = []
+
+                                if dfp_signals['sentiment'] == 'STRONG BULLISH':
+                                    insights.append("🟢🟢 Extremely strong buying pressure - Momentum likely to continue")
+                                elif dfp_signals['sentiment'] == 'BULLISH':
+                                    insights.append("🟢 Bullish delta - Buyers in control")
+                                elif dfp_signals['sentiment'] == 'STRONG BEARISH':
+                                    insights.append("🔴🔴 Extremely strong selling pressure - Downtrend likely")
+                                elif dfp_signals['sentiment'] == 'BEARISH':
+                                    insights.append("🔴 Bearish delta - Sellers in control")
+                                else:
+                                    insights.append("🟡 Neutral delta - Balanced orderflow, wait for confirmation")
+
+                                if dfp_signals['strong_buy_levels']:
+                                    insights.append(f"📍 {len(dfp_signals['strong_buy_levels'])} strong buy level(s) detected - Potential support zones")
+
+                                if dfp_signals['strong_sell_levels']:
+                                    insights.append(f"📍 {len(dfp_signals['strong_sell_levels'])} strong sell level(s) detected - Potential resistance zones")
+
+                                if dfp_signals['absorption_zones']:
+                                    insights.append(f"🛡️ {len(dfp_signals['absorption_zones'])} absorption zone(s) - Watch for reversals at these levels")
+
+                                for insight in insights:
+                                    st.info(insight)
+
+                            else:
+                                st.error(f"Error: {dfp_signals.get('error', 'Unknown error')}")
                         tab_idx += 1
 
                     # Price Action Data
