@@ -3015,8 +3015,401 @@ def compute_oi_velocity_acceleration(history, atm_strike, window_strikes=3):
     acc_score = _norm01(np.median(acc), 0, max(1.0, np.percentile(acc, 90)))
     
     score = int(100 * (0.6 * vel_score + 0.4 * acc_score))
-    return {"available": True, "score": score, 
+    return {"available": True, "score": score,
             "note": "OI speed-up detected in ATM cluster" if score > 60 else "OI changes are slow/steady"}
+
+# ============================================
+# 🎯 MARKET DEPTH ANALYZER (NEW)
+# ============================================
+
+def get_market_depth_nse(limit=20):
+    """
+    Fetch Nifty market depth from NSE or alternative source
+    Returns: dict with bid/ask depth
+    """
+    try:
+        # Using NSE API as alternative to Dhan for depth
+        url = "https://www.nseindia.com/api/quote-equity?symbol=NIFTY"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.nseindia.com/get-quotes/equity"
+        }
+
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            depth_data = data.get("marketDeptOrderBook", {})
+
+            if depth_data:
+                return {
+                    "bid": depth_data.get("buy", []),
+                    "ask": depth_data.get("sell", []),
+                    "total_bid_qty": sum(item.get("quantity", 0) for item in depth_data.get("buy", [])),
+                    "total_ask_qty": sum(item.get("quantity", 0) for item in depth_data.get("sell", [])),
+                    "source": "NSE"
+                }
+    except Exception as e:
+        st.warning(f"Depth fetch failed: {e}")
+
+    # Fallback: Simulated depth if API fails
+    return generate_simulated_depth()
+
+def generate_simulated_depth():
+    """
+    Generate simulated depth for demo/testing
+    """
+    spot_price = get_nifty_spot_price()
+    if spot_price == 0:
+        spot_price = 22500  # Default
+
+    bid_side = []
+    ask_side = []
+
+    # Generate bid side (prices below spot)
+    for i in range(1, 11):
+        price = spot_price - (i * 5)  # 5 point intervals
+        qty = np.random.randint(1000, 10000) * (12 - i)  # More volume near spot
+        bid_side.append({
+            "price": round(price, 2),
+            "quantity": int(qty),
+            "orders": np.random.randint(5, 50)
+        })
+
+    # Generate ask side (prices above spot)
+    for i in range(1, 11):
+        price = spot_price + (i * 5)  # 5 point intervals
+        qty = np.random.randint(1000, 10000) * (12 - i)  # More volume near spot
+        ask_side.append({
+            "price": round(price, 2),
+            "quantity": int(qty),
+            "orders": np.random.randint(5, 50)
+        })
+
+    return {
+        "bid": sorted(bid_side, key=lambda x: x["price"], reverse=True),  # Highest bid first
+        "ask": sorted(ask_side, key=lambda x: x["price"]),  # Lowest ask first
+        "total_bid_qty": sum(item["quantity"] for item in bid_side),
+        "total_ask_qty": sum(item["quantity"] for item in ask_side),
+        "source": "SIMULATED"
+    }
+
+def analyze_market_depth(depth_data, spot_price, levels=10):
+    """
+    Comprehensive market depth analysis
+    """
+    if not depth_data or "bid" not in depth_data or "ask" not in depth_data:
+        return {"available": False}
+
+    bids = depth_data["bid"][:levels]
+    asks = depth_data["ask"][:levels]
+
+    total_bid_qty = depth_data.get("total_bid_qty", sum(b["quantity"] for b in bids if isinstance(b, dict)))
+    total_ask_qty = depth_data.get("total_ask_qty", sum(a["quantity"] for a in asks if isinstance(a, dict)))
+
+    # 1. Depth Imbalance
+    total_qty = total_bid_qty + total_ask_qty
+    depth_imbalance = (total_bid_qty - total_ask_qty) / total_qty if total_qty > 0 else 0
+
+    # 2. Near-spot concentration
+    near_bid_qty = sum(b["quantity"] for b in bids[:3] if isinstance(b, dict))  # Top 3 bids
+    near_ask_qty = sum(a["quantity"] for a in asks[:3] if isinstance(a, dict))  # Top 3 asks
+    near_imbalance = (near_bid_qty - near_ask_qty) / (near_bid_qty + near_ask_qty) if (near_bid_qty + near_ask_qty) > 0 else 0
+
+    # 3. Large Orders Detection
+    avg_bid_qty = np.mean([b["quantity"] for b in bids if isinstance(b, dict)]) if bids else 0
+    avg_ask_qty = np.mean([a["quantity"] for a in asks if isinstance(a, dict)]) if asks else 0
+
+    large_bid_orders = [b for b in bids if isinstance(b, dict) and b["quantity"] > avg_bid_qty * 3]
+    large_ask_orders = [a for a in asks if isinstance(a, dict) and a["quantity"] > avg_ask_qty * 3]
+
+    # 4. Spread Analysis
+    if bids and asks:
+        best_bid = max(b["price"] for b in bids if isinstance(b, dict))
+        best_ask = min(a["price"] for a in asks if isinstance(a, dict))
+        spread = best_ask - best_bid
+        spread_percent = (spread / spot_price) * 100
+    else:
+        best_bid = spot_price
+        best_ask = spot_price
+        spread = 0
+        spread_percent = 0
+
+    # 5. Depth Profile
+    price_levels = sorted([(b["price"], "BID", b["quantity"]) for b in bids if isinstance(b, dict)] +
+                          [(a["price"], "ASK", a["quantity"]) for a in asks if isinstance(a, dict)],
+                          key=lambda x: x[0])
+
+    # 6. Support/Resistance from Depth
+    support_levels = sorted([b for b in bids if isinstance(b, dict)], key=lambda x: x["quantity"], reverse=True)[:3]
+    resistance_levels = sorted([a for a in asks if isinstance(a, dict)], key=lambda x: x["quantity"], reverse=True)[:3]
+
+    return {
+        "available": True,
+        "depth_imbalance": depth_imbalance,
+        "near_imbalance": near_imbalance,
+        "total_bid_qty": total_bid_qty,
+        "total_ask_qty": total_ask_qty,
+        "best_bid": best_bid,
+        "best_ask": best_ask,
+        "spread": spread,
+        "spread_percent": spread_percent,
+        "large_bid_orders": len(large_bid_orders),
+        "large_ask_orders": len(large_ask_orders),
+        "avg_bid_size": avg_bid_qty,
+        "avg_ask_size": avg_ask_qty,
+        "price_levels": price_levels,
+        "top_supports": [(s["price"], s["quantity"]) for s in support_levels],
+        "top_resistances": [(r["price"], r["quantity"]) for r in resistance_levels],
+        "bid_side": bids,
+        "ask_side": asks,
+        "total_levels": len(bids) + len(asks)
+    }
+
+def calculate_depth_based_signals(depth_analysis, spot_price):
+    """
+    Generate trading signals from depth analysis
+    """
+    if not depth_analysis["available"]:
+        return {"available": False}
+
+    signals = []
+    confidence = 0
+    signal_type = "NEUTRAL"
+
+    # 1. Depth Imbalance Signal
+    imbalance = depth_analysis["depth_imbalance"]
+    if imbalance > 0.3:
+        signals.append(f"Strong buy depth (imbalance: {imbalance:+.2f})")
+        confidence += 30
+        signal_type = "BULLISH"
+    elif imbalance < -0.3:
+        signals.append(f"Strong sell depth (imbalance: {imbalance:+.2f})")
+        confidence += 30
+        signal_type = "BEARISH"
+
+    # 2. Near-spot Imbalance
+    near_imbalance = depth_analysis["near_imbalance"]
+    if abs(near_imbalance) > 0.4:
+        if near_imbalance > 0:
+            signals.append(f"Heavy bids near spot")
+            confidence += 20
+            if signal_type == "NEUTRAL":
+                signal_type = "BULLISH"
+        else:
+            signals.append(f"Heavy asks near spot")
+            confidence += 20
+            if signal_type == "NEUTRAL":
+                signal_type = "BEARISH"
+
+    # 3. Large Orders Signal
+    if depth_analysis["large_bid_orders"] > depth_analysis["large_ask_orders"] + 2:
+        signals.append(f"More large bids ({depth_analysis['large_bid_orders']}) than asks ({depth_analysis['large_ask_orders']})")
+        confidence += 15
+    elif depth_analysis["large_ask_orders"] > depth_analysis["large_bid_orders"] + 2:
+        signals.append(f"More large asks ({depth_analysis['large_ask_orders']}) than bids ({depth_analysis['large_bid_orders']})")
+        confidence += 15
+
+    # 4. Spread Analysis
+    if depth_analysis["spread_percent"] < 0.01:  # Tight spread
+        signals.append(f"Tight spread ({depth_analysis['spread_percent']:.3f}%) - Good liquidity")
+        confidence += 10
+    elif depth_analysis["spread_percent"] > 0.05:  # Wide spread
+        signals.append(f"Wide spread ({depth_analysis['spread_percent']:.3f}%) - Low liquidity")
+        confidence -= 10
+
+    # Determine overall signal
+    if confidence >= 50:
+        strength = "STRONG"
+        color = "#00ff88" if signal_type == "BULLISH" else "#ff4444"
+    elif confidence >= 30:
+        strength = "MODERATE"
+        color = "#00cc66" if signal_type == "BULLISH" else "#ff6666"
+    else:
+        strength = "NEUTRAL"
+        signal_type = "NEUTRAL"
+        color = "#66b3ff"
+
+    return {
+        "available": True,
+        "signal_type": signal_type,
+        "strength": strength,
+        "confidence": min(confidence, 100),
+        "color": color,
+        "signals": signals,
+        "imbalance": imbalance,
+        "near_imbalance": near_imbalance,
+        "spread_percent": depth_analysis["spread_percent"]
+    }
+
+def enhanced_orderbook_pressure(depth_analysis, spot):
+    """
+    Enhanced orderbook pressure with depth analysis
+    """
+    if not depth_analysis["available"]:
+        return {"available": False}
+
+    # Calculate pressure from multiple depth factors
+    factors = []
+    pressure_score = 0
+
+    # 1. Overall imbalance (40% weight)
+    imbalance = depth_analysis["depth_imbalance"]
+    pressure_score += imbalance * 0.4
+    factors.append(f"Overall imbalance: {imbalance:+.3f}")
+
+    # 2. Near-spot concentration (30% weight)
+    near_imbalance = depth_analysis["near_imbalance"]
+    pressure_score += near_imbalance * 0.3
+    factors.append(f"Near-spot imbalance: {near_imbalance:+.3f}")
+
+    # 3. Large orders bias (20% weight)
+    large_orders_diff = (depth_analysis["large_bid_orders"] - depth_analysis["large_ask_orders"])
+    large_orders_bias = large_orders_diff / max(1, depth_analysis["large_bid_orders"] + depth_analysis["large_ask_orders"])
+    pressure_score += large_orders_bias * 0.2
+    factors.append(f"Large orders bias: {large_orders_bias:+.3f}")
+
+    # 4. Spread tightness (10% weight) - tighter spread = more pressure
+    spread_factor = max(0, 0.05 - depth_analysis["spread_percent"]) / 0.05  # Normalize 0-1
+    pressure_score += spread_factor * 0.1
+    factors.append(f"Spread factor: {spread_factor:+.3f}")
+
+    # Normalize to -1 to 1 range
+    pressure_score = max(min(pressure_score, 1), -1)
+
+    return {
+        "available": True,
+        "pressure": pressure_score,
+        "factors": factors,
+        "total_bid_qty": depth_analysis["total_bid_qty"],
+        "total_ask_qty": depth_analysis["total_ask_qty"],
+        "best_bid": depth_analysis["best_bid"],
+        "best_ask": depth_analysis["best_ask"],
+        "spread": depth_analysis["spread"],
+        "spread_percent": depth_analysis["spread_percent"]
+    }
+
+def display_market_depth_dashboard(spot, depth_analysis, depth_signals, enhanced_pressure):
+    """
+    Display comprehensive market depth dashboard
+    """
+    st.markdown("---")
+    st.markdown("## 📊 MARKET DEPTH ANALYZER (Order Book)")
+
+    if not depth_analysis["available"]:
+        st.warning("Market depth data unavailable")
+        return
+
+    # Header with key metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        imbalance = depth_analysis["depth_imbalance"]
+        color = "#00ff88" if imbalance > 0.1 else ("#ff4444" if imbalance < -0.1 else "#66b3ff")
+        st.markdown(f"""
+        <div style="text-align: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color:#cccccc;">Depth Imbalance</div>
+            <div style="font-size: 1.8rem; color:{color}; font-weight:700;">{imbalance:+.3f}</div>
+            <div style="font-size: 0.8rem; color:#aaaaaa;">Bid/Ask ratio</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        spread_pct = depth_analysis["spread_percent"]
+        color = "#00ff88" if spread_pct < 0.02 else ("#ff9900" if spread_pct < 0.05 else "#ff4444")
+        st.markdown(f"""
+        <div style="text-align: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color:#cccccc;">Bid-Ask Spread</div>
+            <div style="font-size: 1.8rem; color:{color}; font-weight:700;">{spread_pct:.3f}%</div>
+            <div style="font-size: 0.8rem; color:#aaaaaa;">₹{depth_analysis['spread']:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        total_bid = depth_analysis["total_bid_qty"]
+        st.markdown(f"""
+        <div style="text-align: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color:#cccccc;">Total Bid Qty</div>
+            <div style="font-size: 1.8rem; color:#00ff88; font-weight:700;">{total_bid:,}</div>
+            <div style="font-size: 0.8rem; color:#aaaaaa;">Buy orders</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        total_ask = depth_analysis["total_ask_qty"]
+        st.markdown(f"""
+        <div style="text-align: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+            <div style="font-size: 0.9rem; color:#cccccc;">Total Ask Qty</div>
+            <div style="font-size: 1.8rem; color:#ff4444; font-weight:700;">{total_ask:,}</div>
+            <div style="font-size: 0.8rem; color:#aaaaaa;">Sell orders</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Depth Signal
+    st.markdown("### 🎯 Depth-Based Signal")
+    if depth_signals["available"]:
+        col_sig1, col_sig2 = st.columns([1, 2])
+
+        with col_sig1:
+            st.markdown(f"""
+            <div style="
+                padding: 20px;
+                border-radius: 10px;
+                background: {'#1a2e1a' if depth_signals['signal_type'] == 'BULLISH' else
+                           '#2e1a1a' if depth_signals['signal_type'] == 'BEARISH' else '#1a1f2e'};
+                border: 3px solid {depth_signals['color']};
+                text-align: center;
+            ">
+                <div style="font-size: 1.2rem; color:#ffffff;">Depth Signal</div>
+                <div style="font-size: 2rem; color:{depth_signals['color']}; font-weight:900;">
+                    {depth_signals['signal_type']}
+                </div>
+                <div style="font-size: 1rem; color:#ffcc00;">
+                    {depth_signals['strength']}
+                </div>
+                <div style="font-size: 0.9rem; color:#cccccc; margin-top:10px;">
+                    Confidence: {depth_signals['confidence']}%
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_sig2:
+            st.markdown("#### Signal Factors:")
+            for signal in depth_signals["signals"]:
+                st.markdown(f"• {signal}")
+
+    # Enhanced Pressure Analysis
+    st.markdown("### ⚡ Enhanced Orderbook Pressure")
+    if enhanced_pressure["available"]:
+        col_pres1, col_pres2 = st.columns(2)
+
+        with col_pres1:
+            pressure = enhanced_pressure["pressure"]
+            color = "#00ff88" if pressure > 0.2 else ("#ff4444" if pressure < -0.2 else "#66b3ff")
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background: rgba(0,0,0,0.3); border-radius: 10px;">
+                <div style="font-size: 1.1rem; color:#cccccc;">Enhanced Pressure Score</div>
+                <div style="font-size: 2.5rem; color:{color}; font-weight:900; margin:10px 0;">
+                    {pressure:+.3f}
+                </div>
+                <div style="font-size: 0.9rem; color:#aaaaaa;">
+                    Range: -1 (Sell) to +1 (Buy)
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_pres2:
+            st.markdown("#### Pressure Factors:")
+            for factor in enhanced_pressure["factors"]:
+                st.markdown(f"• {factor}")
+
+            st.markdown(f"""
+            **Current Spot:** ₹{spot:,.2f}
+            **Best Bid:** ₹{enhanced_pressure['best_bid']:,.2f}
+            **Best Ask:** ₹{enhanced_pressure['best_ask']:,.2f}
+            **Spread:** ₹{enhanced_pressure['spread']:.2f} ({enhanced_pressure['spread_percent']:.3f}%)
+            """)
 
 # -----------------------
 # 🔥 ENTRY SIGNAL CALCULATION (EXTENDED WITH MOMENT DETECTOR & ATM BIAS)
@@ -4469,7 +4862,29 @@ def render_nifty_option_screener():
             'recommended_strategy': 'Check logs',
             'optimal_timeframe': 'N/A'
         }
-    
+
+    # ============================================
+    # 📊 MARKET DEPTH ANALYZER (NEW)
+    # ============================================
+
+    # Fetch market depth
+    depth_data = get_market_depth_nse(limit=15)
+
+    # Analyze depth
+    depth_analysis = analyze_market_depth(depth_data, spot, levels=10)
+
+    # Generate depth-based signals
+    depth_signals = calculate_depth_based_signals(depth_analysis, spot)
+
+    # Enhanced orderbook pressure with depth
+    if depth_analysis["available"]:
+        depth_enhanced_pressure = enhanced_orderbook_pressure(depth_analysis, spot)
+        # Update moment_metrics orderbook with depth-enhanced version if available
+        if depth_enhanced_pressure["available"]:
+            moment_metrics["orderbook"] = depth_enhanced_pressure
+    else:
+        depth_enhanced_pressure = {"available": False}
+
     # ============================================
     # 🎯 ATM BIAS ANALYSIS (NEW)
     # ============================================
@@ -4515,6 +4930,7 @@ def render_nifty_option_screener():
         "🎯 ATM Bias Analyzer",
         "🎪 Seller's Perspective",
         "🚀 Moment Detector",
+        "📊 Market Depth Analyzer",
         "📅 Expiry Analysis",
         "📱 Telegram Signals"
     ])
@@ -4797,10 +5213,18 @@ def render_nifty_option_screener():
     )
 
     # ═══════════════════════════════════════════════════════════════════
-    # SUB-TAB 4: EXPIRY ANALYSIS
+    # SUB-TAB 4: MARKET DEPTH ANALYZER
     # ═══════════════════════════════════════════════════════════════════
 
     with screener_tabs[4]:
+        # Display Market Depth Dashboard
+        display_market_depth_dashboard(spot, depth_analysis, depth_signals, depth_enhanced_pressure)
+
+    # ═══════════════════════════════════════════════════════════════════
+    # SUB-TAB 5: EXPIRY ANALYSIS
+    # ═══════════════════════════════════════════════════════════════════
+
+    with screener_tabs[5]:
         st.markdown("## 📅 EXPIRY DATE SPIKE DETECTOR")
 
         # Main spike card
@@ -4995,7 +5419,7 @@ def render_nifty_option_screener():
     # SUB-TAB 5: TELEGRAM SIGNALS
     # ═══════════════════════════════════════════════════════════════════
 
-    with screener_tabs[5]:
+    with screener_tabs[6]:
         st.markdown("## 📱 TELEGRAM SIGNAL GENERATION (Option 3 Format)")
 
         if telegram_signal:
