@@ -1,4 +1,4 @@
-import streamlit as st
+import str eamlit as st
 import time
 from datetime import datetime
 import pandas as pd
