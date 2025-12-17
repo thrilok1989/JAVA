@@ -621,6 +621,143 @@ class XGBoostMLAnalyzer:
             features['oi_buildup_pattern'] = 0
             features['max_pain_distance'] = 0
 
+        # ========== TAB 7: ADVANCED CHART ANALYSIS FEATURES ==========
+        # These features will be populated from liquidity_result and chart analysis
+
+        # --- HTF Support/Resistance Features (4 features) ---
+        if liquidity_result:
+            # Distance to nearest HTF resistance
+            resistance_zones = liquidity_result.resistance_zones if hasattr(liquidity_result, 'resistance_zones') else []
+            support_zones = liquidity_result.support_zones if hasattr(liquidity_result, 'support_zones') else []
+
+            if len(df) > 0:
+                current_price = df['close'].iloc[-1]
+
+                if resistance_zones:
+                    nearest_resistance = min(resistance_zones, key=lambda x: abs(x - current_price))
+                    features['htf_resistance_distance'] = ((nearest_resistance - current_price) / current_price) * 100
+                    features['htf_resistance_strength'] = len([r for r in resistance_zones if abs(r - nearest_resistance) < 50])
+                else:
+                    features['htf_resistance_distance'] = 5.0
+                    features['htf_resistance_strength'] = 0
+
+                if support_zones:
+                    nearest_support = min(support_zones, key=lambda x: abs(x - current_price))
+                    features['htf_support_distance'] = ((current_price - nearest_support) / current_price) * 100
+                    features['htf_support_strength'] = len([s for s in support_zones if abs(s - nearest_support) < 50])
+                else:
+                    features['htf_support_distance'] = 5.0
+                    features['htf_support_strength'] = 0
+            else:
+                features['htf_resistance_distance'] = 5.0
+                features['htf_resistance_strength'] = 0
+                features['htf_support_distance'] = 5.0
+                features['htf_support_strength'] = 0
+        else:
+            features['htf_resistance_distance'] = 5.0
+            features['htf_resistance_strength'] = 0
+            features['htf_support_distance'] = 5.0
+            features['htf_support_strength'] = 0
+
+        # --- Volume Footprint Features (4 features) ---
+        # Volume footprint shows buying vs selling pressure at each price level
+        if len(df) >= 20:
+            # Calculate volume-weighted price momentum
+            df_recent = df.tail(20)
+            volume_price_trend = df_recent[['close', 'volume']].corr().iloc[0, 1] if 'volume' in df.columns else 0
+            features['volume_footprint_trend'] = volume_price_trend
+
+            # Calculate buying/selling pressure from volume
+            up_bars = df_recent[df_recent['close'] > df_recent['open']]
+            down_bars = df_recent[df_recent['close'] < df_recent['open']]
+
+            buy_volume = up_bars['volume'].sum() if 'volume' in df.columns and len(up_bars) > 0 else 0
+            sell_volume = down_bars['volume'].sum() if 'volume' in df.columns and len(down_bars) > 0 else 0
+            total_vol = buy_volume + sell_volume
+
+            if total_vol > 0:
+                features['volume_buy_sell_ratio'] = (buy_volume - sell_volume) / total_vol
+                features['volume_imbalance'] = abs(buy_volume - sell_volume) / total_vol
+            else:
+                features['volume_buy_sell_ratio'] = 0
+                features['volume_imbalance'] = 0
+
+            # Volume concentration at current level
+            recent_vol_avg = df_recent['volume'].mean() if 'volume' in df.columns else 0
+            current_vol = df['volume'].iloc[-1] if 'volume' in df.columns else 0
+            features['volume_concentration'] = (current_vol / recent_vol_avg) if recent_vol_avg > 0 else 1.0
+        else:
+            features['volume_footprint_trend'] = 0
+            features['volume_buy_sell_ratio'] = 0
+            features['volume_imbalance'] = 0
+            features['volume_concentration'] = 1.0
+
+        # --- Liquidity Sentiment Features (3 features) ---
+        if liquidity_result:
+            # Gravity strength towards liquidity target
+            features['liquidity_gravity_strength'] = liquidity_result.gravity_strength if hasattr(liquidity_result, 'gravity_strength') else 0
+
+            # Number of nearby liquidity zones
+            hvn_count = len(liquidity_result.hvn_zones) if hasattr(liquidity_result, 'hvn_zones') else 0
+            features['liquidity_hvn_count'] = hvn_count
+
+            # Liquidity sentiment (encoded: positive = bullish liquidity pull)
+            if len(df) > 0 and hasattr(liquidity_result, 'primary_target'):
+                current_price = df['close'].iloc[-1]
+                target_price = liquidity_result.primary_target
+
+                if target_price > current_price:
+                    features['liquidity_sentiment'] = 1  # Bullish liquidity pull
+                elif target_price < current_price:
+                    features['liquidity_sentiment'] = -1  # Bearish liquidity pull
+                else:
+                    features['liquidity_sentiment'] = 0
+            else:
+                features['liquidity_sentiment'] = 0
+        else:
+            features['liquidity_gravity_strength'] = 0
+            features['liquidity_hvn_count'] = 0
+            features['liquidity_sentiment'] = 0
+
+        # --- Fibonacci Level Features (4 features) ---
+        # Fibonacci retracement levels (calculated from recent swing high/low)
+        if len(df) >= 50:
+            df_fib = df.tail(50)
+            swing_high = df_fib['high'].max()
+            swing_low = df_fib['low'].min()
+            current_price = df['close'].iloc[-1]
+
+            # Calculate Fibonacci retracement levels
+            fib_range = swing_high - swing_low
+            fib_618 = swing_low + (fib_range * 0.618)
+            fib_50 = swing_low + (fib_range * 0.5)
+            fib_382 = swing_low + (fib_range * 0.382)
+
+            # Distance to key Fib levels
+            fib_levels = [fib_618, fib_50, fib_382]
+            nearest_fib = min(fib_levels, key=lambda x: abs(x - current_price))
+            features['fib_nearest_level_distance'] = ((nearest_fib - current_price) / current_price) * 100
+
+            # Price position relative to Fib range (0 = at swing low, 1 = at swing high)
+            if fib_range > 0:
+                features['fib_position_in_range'] = (current_price - swing_low) / fib_range
+            else:
+                features['fib_position_in_range'] = 0.5
+
+            # Golden pocket zone (0.618-0.65 retracement) - binary feature
+            golden_pocket_low = swing_low + (fib_range * 0.618)
+            golden_pocket_high = swing_low + (fib_range * 0.65)
+            features['fib_in_golden_pocket'] = 1 if golden_pocket_low <= current_price <= golden_pocket_high else 0
+
+            # Fib extension level (above swing high for uptrends)
+            fib_ext_1618 = swing_high + (fib_range * 0.618)
+            features['fib_extension_distance'] = ((fib_ext_1618 - current_price) / current_price) * 100
+        else:
+            features['fib_nearest_level_distance'] = 0
+            features['fib_position_in_range'] = 0.5
+            features['fib_in_golden_pocket'] = 0
+            features['fib_extension_distance'] = 0
+
         # Convert to DataFrame
         feature_df = pd.DataFrame([features])
 
