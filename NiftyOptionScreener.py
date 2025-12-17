@@ -925,7 +925,7 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
 # 📊 ATM ±2 STRIKES DETAILED TABULATION
 # ============================================
 
-def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
+def analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry=""):
     """
     Calculate 13 bias metrics for a single strike (including Market Depth)
     Returns: dict with bias scores, emojis, and interpretations for one strike
@@ -948,15 +948,21 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     security_id_ce = strike_data.get("SecurityId_CE", 0)
     security_id_pe = strike_data.get("SecurityId_PE", 0)
 
-    # Fetch market depth for this strike (if security IDs available)
+    # Fetch market depth for this strike
+    # Try strike/expiry based approach first, then fall back to security IDs
     depth_data = None
     depth_error = None
-    if security_id_ce > 0 and security_id_pe > 0:
-        depth_data = get_option_contract_depth(security_id_ce, security_id_pe)
-        if not depth_data.get("available") and "error" in depth_data:
-            depth_error = depth_data.get("error")
-    else:
-        depth_error = f"Missing security IDs (CE:{security_id_ce}, PE:{security_id_pe})"
+
+    # Call with strike and expiry parameters
+    depth_data = get_option_contract_depth(
+        security_id_ce=security_id_ce,
+        security_id_pe=security_id_pe,
+        strike_price=strike_price,
+        expiry=expiry
+    )
+
+    if not depth_data.get("available") and "error" in depth_data:
+        depth_error = depth_data.get("error")
 
     # 1. OI BIAS
     oi_ratio = pe_oi / max(ce_oi, 1)
@@ -1200,7 +1206,7 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     }
 
 
-def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
+def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap, expiry=""):
     """
     Create tabulation for ATM ±2 strikes with 13 bias metrics each
     (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR, Depth)
@@ -1217,7 +1223,7 @@ def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
 
         if not strike_row.empty:
             strike_data = strike_row.iloc[0].to_dict()
-            analysis = analyze_individual_strike_bias(strike_data, strike_price, atm_strike)
+            analysis = analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry)
             strike_analyses.append(analysis)
 
     return strike_analyses
@@ -4884,7 +4890,7 @@ def load_option_screener_data_silently():
         seller_max_pain = calculate_seller_max_pain(merged)
         total_gex_net = merged["GEX_Net"].sum()
         oi_pcr_metrics = analyze_oi_pcr_metrics(merged, spot, atm_strike)
-        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap)
+        strike_analyses = create_atm_strikes_tabulation(merged, spot, atm_strike, strike_gap, expiry)
         expiry_spike_data = detect_expiry_spikes(merged, spot, atm_strike, days_to_expiry, expiry)
 
         # Get sector rotation data if available
@@ -5691,9 +5697,16 @@ def render_nifty_option_screener():
             # Run comprehensive analysis for ATM ±2 strikes
             atm_strikes_to_analyze = [atm_strike + (i * strike_gap) for i in range(-2, 3)]
 
-            for strike in atm_strikes_to_analyze:
-                with st.expander(f"📊 Strike {strike} - Comprehensive Depth Analysis"):
+            # Rate limiting info
+            st.info("⏱️ Fetching depth data with rate limiting (1 req/sec) - This may take ~10 seconds...")
+
+            for idx, strike in enumerate(atm_strikes_to_analyze):
+                with st.expander(f"📊 Strike {strike} - Comprehensive Depth Analysis", expanded=(idx == 2)):  # Expand ATM by default
                     st.markdown(f"### Analyzing {strike} CE & PE")
+
+                    # Rate limiting: 1.2 seconds between strikes
+                    if idx > 0:
+                        time.sleep(1.2)
 
                     # Analyze CE
                     st.markdown("#### 📈 CALL Option (CE)")
@@ -5711,6 +5724,9 @@ def render_nifty_option_screener():
                         st.warning(f"CE analysis unavailable: {ce_analysis.get('error', 'Unknown error')}")
 
                     st.markdown("---")
+
+                    # Rate limiting before PE call
+                    time.sleep(1.2)
 
                     # Analyze PE
                     st.markdown("#### 📉 PUT Option (PE)")
