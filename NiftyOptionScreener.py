@@ -3121,15 +3121,45 @@ def compute_oi_velocity_acceleration(history, atm_strike, window_strikes=3):
 # 🎯 MARKET DEPTH ANALYZER (NEW)
 # ============================================
 
-def get_option_contract_depth(security_id_ce, security_id_pe, exchange_segment="NSE_FNO"):
+def get_option_contract_depth(security_id_ce, security_id_pe, strike_price=0, expiry="", exchange_segment="NSE_FNO"):
     """
     Fetch market depth for CE and PE contracts
+    Tries strike/expiry approach first, then falls back to security IDs
     Returns: dict with CE and PE depth data
     """
+    # Try strike-based approach first if available
+    if strike_price > 0 and expiry and ADVANCED_DEPTH_AVAILABLE:
+        try:
+            dhan_config = {
+                "base_url": DHAN_BASE_URL,
+                "access_token": DHAN_ACCESS_TOKEN,
+                "client_id": DHAN_CLIENT_ID
+            }
+
+            ce_depth = get_real_option_depth_from_dhan(strike_price, expiry, "CE", dhan_config)
+            pe_depth = get_real_option_depth_from_dhan(strike_price, expiry, "PE", dhan_config)
+
+            if ce_depth.get("available") and pe_depth.get("available"):
+                return {
+                    "available": True,
+                    "ce_bid_qty": ce_depth.get("total_bid_qty", 0),
+                    "ce_ask_qty": ce_depth.get("total_ask_qty", 0),
+                    "pe_bid_qty": pe_depth.get("total_bid_qty", 0),
+                    "pe_ask_qty": pe_depth.get("total_ask_qty", 0),
+                    "ce_total": ce_depth.get("total_bid_qty", 0) + ce_depth.get("total_ask_qty", 0),
+                    "pe_total": pe_depth.get("total_bid_qty", 0) + pe_depth.get("total_ask_qty", 0),
+                    "ce_depth_full": ce_depth,
+                    "pe_depth_full": pe_depth
+                }
+        except Exception as e:
+            # Fall through to security ID approach
+            pass
+
+    # Fallback to security ID approach
     try:
         # Validate security IDs
         if not security_id_ce or not security_id_pe or security_id_ce == 0 or security_id_pe == 0:
-            return {"available": False, "error": "Invalid security IDs"}
+            return {"available": False, "error": "Invalid security IDs and no strike/expiry provided"}
 
         url = f"{DHAN_BASE_URL}/v2/marketfeed/quote"
         payload = {exchange_segment: [int(security_id_ce), int(security_id_pe)]}
@@ -3171,11 +3201,11 @@ def get_option_contract_depth(security_id_ce, security_id_pe, exchange_segment="
                         "pe_total": pe_bid_qty + pe_ask_qty
                     }
                 else:
-                    return {"available": False, "error": f"No depth data in response for CE:{security_id_ce} PE:{security_id_pe}"}
+                    return {"available": False, "error": f"No depth data in response"}
             else:
                 return {"available": False, "error": f"API error: {data.get('message', 'Unknown error')}"}
         else:
-            return {"available": False, "error": f"HTTP {response.status_code}: {response.text[:100]}"}
+            return {"available": False, "error": f"HTTP {response.status_code}"}
 
     except Exception as e:
         return {"available": False, "error": f"Exception: {str(e)}"}
