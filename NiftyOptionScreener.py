@@ -1382,7 +1382,7 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
     st.markdown("<br/>", unsafe_allow_html=True)
 
     # Create header row
-    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "Depth", "Verdict"]
+    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "MktDepth", "BA", "Verdict"]
 
     # Build HTML table
     html = '<div style="overflow-x: auto;"><table style="width:100%; border-collapse: collapse; font-size: 12px;">'
@@ -1409,8 +1409,8 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         # Strike price
         html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center; font-weight: bold;">{strike}</td>'
 
-        # 13 bias metrics
-        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate", "PCR", "Depth"]:
+        # 14 bias metrics
+        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate", "PCR", "MktDepth", "BA"]:
             emoji = analysis["bias_emojis"].get(metric, "⚖️")
             score = analysis["bias_scores"].get(metric, 0)
             html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center;">{emoji}<br/><small>{score:+.1f}</small></td>'
