@@ -1019,8 +1019,14 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             generate_trading_signal,
             display_signal_card,
             display_signal_history,
-            display_telegram_stats
+            display_telegram_stats,
+            display_market_regime_assessment
         )
+
+        # Display market regime assessment (always show, even without signal)
+        display_market_regime_assessment()
+
+        st.markdown("---")
 
         # Get all required data for signal generation
         if 'bias_analysis_results' in st.session_state:

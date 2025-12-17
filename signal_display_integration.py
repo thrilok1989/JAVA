@@ -150,6 +150,142 @@ async def send_signal_telegram(signal: TradingSignal, force: bool = False) -> Di
         return {"success": False, "error": str(e)}
 
 
+def display_market_regime_assessment():
+    """
+    Display comprehensive market regime assessment
+    Combines: Seller Bias + ATM Bias + Moment + Expiry + OI/PCR
+    """
+    st.markdown("### 📊 FINAL ASSESSMENT (Seller + ATM Bias + Moment + Expiry + OI/PCR)")
+
+    # Get data from session state
+    nifty_screener_data = st.session_state.get('nifty_option_screener_data', {})
+    option_chain = st.session_state.get('overall_option_data', {}).get('NIFTY', {})
+    volatility_result = st.session_state.get('volatility_regime_result', {})
+
+    # Extract key metrics
+    seller_bias = nifty_screener_data.get('seller_bias', {})
+    atm_bias = nifty_screener_data.get('atm_bias', {})
+    moment_detector = nifty_screener_data.get('moment_detector', {})
+    oi_pcr_data = nifty_screener_data.get('oi_pcr_analysis', {})
+    expiry_data = nifty_screener_data.get('expiry_spike', {})
+
+    # Get spot price
+    spot_price = option_chain.get('spot_price', 0)
+
+    # Seller bias interpretation
+    seller_direction = seller_bias.get('direction', 'NEUTRAL')
+    seller_score = seller_bias.get('score', 0)
+    seller_strength = seller_bias.get('strength', 'MILD')
+
+    if seller_direction == "BEARISH":
+        seller_text = f"Sellers aggressively WRITING CALLS (bearish conviction). Expecting price to STAY BELOW strikes."
+        game_plan = "Bearish breakdown likely. Sellers confident in downside."
+    elif seller_direction == "BULLISH":
+        seller_text = f"Sellers aggressively WRITING PUTS (bullish conviction). Expecting price to STAY ABOVE strikes."
+        game_plan = "Bullish continuation likely. Sellers confident in upside."
+    else:
+        seller_text = f"Sellers showing MIXED activity (neutral stance). Waiting for clear direction."
+        game_plan = "Range-bound market. Wait for breakout confirmation."
+
+    # ATM Bias
+    atm_direction = atm_bias.get('bias', 'NEUTRAL')
+    atm_score = atm_bias.get('atm_score', 0)
+
+    if atm_direction == "BULLISH":
+        atm_icon = "📈"
+    elif atm_direction == "BEARISH":
+        atm_icon = "📉"
+    else:
+        atm_icon = "⚖️"
+
+    # Moment Detector
+    moment_signal = moment_detector.get('signal', 'NEUTRAL')
+    if moment_signal == "BUY":
+        moment_text = "Strong buy pressure in orderbook."
+    elif moment_signal == "SELL":
+        moment_text = "Strong sell pressure in orderbook."
+    else:
+        moment_text = "Balanced orderbook pressure."
+
+    # OI/PCR Analysis
+    pcr_ratio = oi_pcr_data.get('pcr_ratio', 0)
+    call_oi = oi_pcr_data.get('total_call_oi', 0)
+    put_oi = oi_pcr_data.get('total_put_oi', 0)
+    atm_concentration = oi_pcr_data.get('atm_concentration', 0)
+
+    if pcr_ratio > 1.3:
+        pcr_sentiment = "STRONG BULLISH"
+    elif pcr_ratio > 1.0:
+        pcr_sentiment = "MILD BULLISH"
+    elif pcr_ratio > 0.7:
+        pcr_sentiment = "MILD BEARISH"
+    else:
+        pcr_sentiment = "STRONG BEARISH"
+
+    # Expiry context
+    days_to_expiry = expiry_data.get('days_to_expiry', 0)
+
+    # Key levels from Volatility Sentiment
+    volatility_sentiment = volatility_result.get('volatility_sentiment', {})
+    support_level = volatility_sentiment.get('support', spot_price - 50)
+    resistance_level = volatility_sentiment.get('resistance', spot_price + 50)
+
+    # Max Pain from OI/PCR
+    max_pain = oi_pcr_data.get('max_pain', spot_price)
+
+    # Max OI walls
+    max_call_strike = oi_pcr_data.get('max_call_oi_strike', 0)
+    max_put_strike = oi_pcr_data.get('max_put_oi_strike', 0)
+
+    # Display the assessment
+    st.markdown(f"""
+    <div style='background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                padding: 20px; border-radius: 10px; border: 2px solid #0f3460; margin-bottom: 20px;'>
+        <div style='color: white; line-height: 1.8;'>
+            <p style='font-size: 16px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Market Makers are telling us:</strong> {seller_text}
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>ATM Zone Analysis:</strong> ATM Bias: {atm_icon} <strong>{atm_direction}</strong> ({atm_score:.2f} score)
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Their game plan:</strong> {game_plan}
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Moment Detector:</strong> {moment_text}
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>OI/PCR Analysis:</strong> PCR: {pcr_ratio:.2f} ({pcr_sentiment}) |
+                CALL OI: {call_oi:,.0f} | PUT OI: {put_oi:,.0f} | ATM Conc: {atm_concentration:.1f}%
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Expiry Context:</strong> Expiry in {days_to_expiry:.1f} days
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Key defense levels:</strong>
+                ₹{support_level:,.0f} (Support) | ₹{resistance_level:,.0f} (Resistance)
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 15px;'>
+                <strong style='color: #00d4ff;'>Max OI Walls:</strong>
+                CALL: ₹{max_call_strike:,.0f} | PUT: ₹{max_put_strike:,.0f}
+            </p>
+
+            <p style='font-size: 15px; margin-bottom: 0;'>
+                <strong style='color: #00d4ff;'>Preferred price level:</strong>
+                ₹{max_pain:,.0f} (Max Pain)
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def display_signal_card(signal: TradingSignal):
     """
     Display trading signal as a prominent card
