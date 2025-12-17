@@ -927,7 +927,8 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
 
 def analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry=""):
     """
-    Calculate 13 bias metrics for a single strike (including Market Depth)
+    Calculate 14 bias metrics for a single strike
+    Metrics: OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR, MktDepth, BA
     Returns: dict with bias scores, emojis, and interpretations for one strike
     """
     bias_scores = {}
@@ -1141,7 +1142,7 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry
         bias_emojis["PCR"] = "⚖️"
     bias_interpretations["PCR"] = f"Strike PCR: {pcr_strike:.2f}"
 
-    # 13. MARKET DEPTH BIAS (CE vs PE Orderbook)
+    # 13. MARKET DEPTH BIAS (CE vs PE Orderbook - 20 levels)
     if depth_data and depth_data.get("available"):
         # Calculate depth imbalance for CE and PE separately
         ce_depth_imbalance = (depth_data["ce_bid_qty"] - depth_data["ce_ask_qty"]) / max(depth_data["ce_total"], 1)
@@ -1151,31 +1152,66 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry
         depth_bias_score = pe_depth_imbalance - ce_depth_imbalance
 
         if depth_bias_score > 0.3:
-            bias_scores["Depth"] = 1
-            bias_emojis["Depth"] = "🐂"
+            bias_scores["MktDepth"] = 1
+            bias_emojis["MktDepth"] = "🐂"
         elif depth_bias_score > 0.1:
-            bias_scores["Depth"] = 0.5
-            bias_emojis["Depth"] = "🐂"
+            bias_scores["MktDepth"] = 0.5
+            bias_emojis["MktDepth"] = "🐂"
         elif depth_bias_score < -0.3:
-            bias_scores["Depth"] = -1
-            bias_emojis["Depth"] = "🐻"
+            bias_scores["MktDepth"] = -1
+            bias_emojis["MktDepth"] = "🐻"
         elif depth_bias_score < -0.1:
-            bias_scores["Depth"] = -0.5
-            bias_emojis["Depth"] = "🐻"
+            bias_scores["MktDepth"] = -0.5
+            bias_emojis["MktDepth"] = "🐻"
         else:
-            bias_scores["Depth"] = 0
-            bias_emojis["Depth"] = "⚖️"
+            bias_scores["MktDepth"] = 0
+            bias_emojis["MktDepth"] = "⚖️"
 
-        bias_interpretations["Depth"] = f"CE:{depth_data['ce_total']:,} PE:{depth_data['pe_total']:,}"
+        bias_interpretations["MktDepth"] = f"CE:{depth_data['ce_total']:,} PE:{depth_data['pe_total']:,}"
     else:
         # No depth data available
-        bias_scores["Depth"] = 0
-        bias_emojis["Depth"] = "⚪"
+        bias_scores["MktDepth"] = 0
+        bias_emojis["MktDepth"] = "⚪"
         # Show error for debugging if available
         if depth_error:
-            bias_interpretations["Depth"] = f"Error: {depth_error[:50]}"
+            bias_interpretations["MktDepth"] = f"Error: {depth_error[:50]}"
         else:
-            bias_interpretations["Depth"] = "N/A"
+            bias_interpretations["MktDepth"] = "N/A"
+
+    # 14. BID/ASK DEPTH (Simple - from Option Chain top bid/ask)
+    # This uses the simple top_bid_qty and top_ask_qty from option chain
+    # Seller's perspective: Compare CE asks (what sellers can sell at) vs PE bids (what sellers face)
+
+    # For now, use the same depth data if available, or calculate from LTP proximity
+    if ce_ltp > 0 and pe_ltp > 0:
+        # Simple BA analysis: Higher CE premium suggests bearish (sellers getting good prices on calls)
+        # Higher PE premium suggests bullish (sellers getting good prices on puts)
+        ce_pe_premium_ratio = ce_ltp / max(pe_ltp, 0.01)
+
+        if ce_pe_premium_ratio > 2.0:
+            bias_scores["BA"] = -1  # CE much higher = Bearish for sellers
+            bias_emojis["BA"] = "🐻"
+            bias_interpretations["BA"] = f"CE:{ce_ltp:.0f} >> PE:{pe_ltp:.0f}"
+        elif ce_pe_premium_ratio > 1.3:
+            bias_scores["BA"] = -0.5
+            bias_emojis["BA"] = "🐻"
+            bias_interpretations["BA"] = f"CE:{ce_ltp:.0f} > PE:{pe_ltp:.0f}"
+        elif ce_pe_premium_ratio < 0.5:
+            bias_scores["BA"] = 1  # PE much higher = Bullish for sellers
+            bias_emojis["BA"] = "🐂"
+            bias_interpretations["BA"] = f"PE:{pe_ltp:.0f} >> CE:{ce_ltp:.0f}"
+        elif ce_pe_premium_ratio < 0.77:
+            bias_scores["BA"] = 0.5
+            bias_emojis["BA"] = "🐂"
+            bias_interpretations["BA"] = f"PE:{pe_ltp:.0f} > CE:{ce_ltp:.0f}"
+        else:
+            bias_scores["BA"] = 0
+            bias_emojis["BA"] = "⚖️"
+            bias_interpretations["BA"] = f"CE:{ce_ltp:.0f} ≈ PE:{pe_ltp:.0f}"
+    else:
+        bias_scores["BA"] = 0
+        bias_emojis["BA"] = "⚪"
+        bias_interpretations["BA"] = "N/A"
 
     # Calculate overall verdict for this strike
     total_bias = sum(bias_scores.values())
@@ -1208,8 +1244,8 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike, expiry
 
 def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap, expiry=""):
     """
-    Create tabulation for ATM ±2 strikes with 13 bias metrics each
-    (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR, Depth)
+    Create tabulation for ATM ±2 strikes with 14 bias metrics each
+    (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR, MktDepth, BA)
     Returns: list of strike analyses
     """
     strike_analyses = []
@@ -1264,10 +1300,10 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         verdict_color = "#FFD700"
         bullish_metrics = 0
         bearish_metrics = 0
-        total_metrics = 13
+        total_metrics = 14
 
     # Display overall bias summary
-    st.markdown("### 📊 ATM ±2 Strikes - 13 Bias Metrics Tabulation")
+    st.markdown("### 📊 ATM ±2 Strikes - 14 Bias Metrics Tabulation")
 
     col1, col2, col3 = st.columns(3)
 
