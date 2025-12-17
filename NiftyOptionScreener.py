@@ -931,8 +931,13 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
 
     # Fetch market depth for this strike (if security IDs available)
     depth_data = None
+    depth_error = None
     if security_id_ce > 0 and security_id_pe > 0:
         depth_data = get_option_contract_depth(security_id_ce, security_id_pe)
+        if not depth_data.get("available") and "error" in depth_data:
+            depth_error = depth_data.get("error")
+    else:
+        depth_error = f"Missing security IDs (CE:{security_id_ce}, PE:{security_id_pe})"
 
     # 1. OI BIAS
     oi_ratio = pe_oi / max(ce_oi, 1)
@@ -1141,7 +1146,11 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
         # No depth data available
         bias_scores["Depth"] = 0
         bias_emojis["Depth"] = "⚪"
-        bias_interpretations["Depth"] = "N/A"
+        # Show error for debugging if available
+        if depth_error:
+            bias_interpretations["Depth"] = f"Error: {depth_error[:50]}"
+        else:
+            bias_interpretations["Depth"] = "N/A"
 
     # Calculate overall verdict for this strike
     total_bias = sum(bias_scores.values())
@@ -3093,6 +3102,10 @@ def get_option_contract_depth(security_id_ce, security_id_pe, exchange_segment="
     Returns: dict with CE and PE depth data
     """
     try:
+        # Validate security IDs
+        if not security_id_ce or not security_id_pe or security_id_ce == 0 or security_id_pe == 0:
+            return {"available": False, "error": "Invalid security IDs"}
+
         url = f"{DHAN_BASE_URL}/v2/marketfeed/quote"
         payload = {exchange_segment: [int(security_id_ce), int(security_id_pe)]}
         headers = {
@@ -3132,11 +3145,17 @@ def get_option_contract_depth(security_id_ce, security_id_pe, exchange_segment="
                         "ce_total": ce_bid_qty + ce_ask_qty,
                         "pe_total": pe_bid_qty + pe_ask_qty
                     }
+                else:
+                    return {"available": False, "error": f"No depth data in response for CE:{security_id_ce} PE:{security_id_pe}"}
+            else:
+                return {"available": False, "error": f"API error: {data.get('message', 'Unknown error')}"}
+        else:
+            return {"available": False, "error": f"HTTP {response.status_code}: {response.text[:100]}"}
 
     except Exception as e:
-        pass
+        return {"available": False, "error": f"Exception: {str(e)}"}
 
-    return {"available": False}
+    return {"available": False, "error": "Unknown error"}
 
 def get_market_depth_dhan():
     """
@@ -3563,6 +3582,24 @@ def display_market_depth_dashboard(spot, depth_analysis, depth_signals, enhanced
             **Best Ask:** ₹{enhanced_pressure['best_ask']:,.2f}
             **Spread:** ₹{enhanced_pressure['spread']:.2f} ({enhanced_pressure['spread_percent']:.3f}%)
             """)
+
+    # Support/Resistance Levels from Depth
+    if depth_analysis.get("top_supports") and depth_analysis.get("top_resistances"):
+        st.markdown("### 📍 Key Levels from Order Book Depth")
+
+        col_sup, col_res = st.columns(2)
+
+        with col_sup:
+            st.markdown("#### 🟢 Support Levels")
+            st.markdown("*Largest bid quantities*")
+            for i, (price, qty) in enumerate(depth_analysis["top_supports"][:3], 1):
+                st.markdown(f"**S{i}:** ₹{price:,.2f} (Qty: {qty:,})")
+
+        with col_res:
+            st.markdown("#### 🔴 Resistance Levels")
+            st.markdown("*Largest ask quantities*")
+            for i, (price, qty) in enumerate(depth_analysis["top_resistances"][:3], 1):
+                st.markdown(f"**R{i}:** ₹{price:,.2f} (Qty: {qty:,})")
 
 # -----------------------
 # 🔥 ENTRY SIGNAL CALCULATION (EXTENDED WITH MOMENT DETECTOR & ATM BIAS)
