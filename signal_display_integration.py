@@ -160,6 +160,7 @@ def display_market_regime_assessment():
     # Get data from session state
     nifty_screener_data = st.session_state.get('nifty_option_screener_data', {})
     option_chain = st.session_state.get('overall_option_data', {}).get('NIFTY', {})
+    volatility_result = st.session_state.get('volatility_regime_result', {})
 
     # Extract key metrics
     seller_bias = nifty_screener_data.get('seller_bias', {})
@@ -177,10 +178,10 @@ def display_market_regime_assessment():
     seller_strength = seller_bias.get('strength', 'MILD')
 
     if seller_direction == "BEARISH":
-        seller_text = f"Sellers aggressively WRITING CALLS ({seller_strength.lower()} bearish conviction). Expecting price to STAY BELOW strikes."
+        seller_text = f"Sellers aggressively WRITING CALLS (bearish conviction). Expecting price to STAY BELOW strikes."
         game_plan = "Bearish breakdown likely. Sellers confident in downside."
     elif seller_direction == "BULLISH":
-        seller_text = f"Sellers aggressively WRITING PUTS ({seller_strength.lower()} bullish conviction). Expecting price to STAY ABOVE strikes."
+        seller_text = f"Sellers aggressively WRITING PUTS (bullish conviction). Expecting price to STAY ABOVE strikes."
         game_plan = "Bullish continuation likely. Sellers confident in upside."
     else:
         seller_text = f"Sellers showing MIXED activity (neutral stance). Waiting for clear direction."
@@ -224,10 +225,13 @@ def display_market_regime_assessment():
     # Expiry context
     days_to_expiry = expiry_data.get('days_to_expiry', 0)
 
-    # Key levels
+    # Key levels from Volatility Sentiment
+    volatility_sentiment = volatility_result.get('volatility_sentiment', {})
+    support_level = volatility_sentiment.get('support', spot_price - 50)
+    resistance_level = volatility_sentiment.get('resistance', spot_price + 50)
+
+    # Max Pain from OI/PCR
     max_pain = oi_pcr_data.get('max_pain', spot_price)
-    support_level = oi_pcr_data.get('key_support', spot_price - 50)
-    resistance_level = oi_pcr_data.get('key_resistance', spot_price + 50)
 
     # Max OI walls
     max_call_strike = oi_pcr_data.get('max_call_oi_strike', 0)
@@ -291,9 +295,6 @@ def display_signal_card(signal: TradingSignal):
     """
     if signal is None:
         return
-
-    # Display market regime assessment first
-    display_market_regime_assessment()
 
     # Determine colors based on signal type and direction
     if signal.signal_type == "ENTRY":
