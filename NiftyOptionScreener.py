@@ -908,7 +908,7 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
 
 def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     """
-    Calculate 12 bias metrics for a single strike
+    Calculate 13 bias metrics for a single strike (including Market Depth)
     Returns: dict with bias scores, emojis, and interpretations for one strike
     """
     bias_scores = {}
@@ -926,6 +926,13 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     pe_ltp = strike_data.get("LTP_PE", 0)
     ce_iv = strike_data.get("IV_CE", 0)
     pe_iv = strike_data.get("IV_PE", 0)
+    security_id_ce = strike_data.get("SecurityId_CE", 0)
+    security_id_pe = strike_data.get("SecurityId_PE", 0)
+
+    # Fetch market depth for this strike (if security IDs available)
+    depth_data = None
+    if security_id_ce > 0 and security_id_pe > 0:
+        depth_data = get_option_contract_depth(security_id_ce, security_id_pe)
 
     # 1. OI BIAS
     oi_ratio = pe_oi / max(ce_oi, 1)
@@ -1104,6 +1111,38 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
         bias_emojis["PCR"] = "⚖️"
     bias_interpretations["PCR"] = f"Strike PCR: {pcr_strike:.2f}"
 
+    # 13. MARKET DEPTH BIAS (CE vs PE Orderbook)
+    if depth_data and depth_data.get("available"):
+        # Calculate depth imbalance for CE and PE separately
+        ce_depth_imbalance = (depth_data["ce_bid_qty"] - depth_data["ce_ask_qty"]) / max(depth_data["ce_total"], 1)
+        pe_depth_imbalance = (depth_data["pe_bid_qty"] - depth_data["pe_ask_qty"]) / max(depth_data["pe_total"], 1)
+
+        # Net depth bias: Positive PE depth imbalance = Bullish, Positive CE depth imbalance = Bearish
+        depth_bias_score = pe_depth_imbalance - ce_depth_imbalance
+
+        if depth_bias_score > 0.3:
+            bias_scores["Depth"] = 1
+            bias_emojis["Depth"] = "🐂"
+        elif depth_bias_score > 0.1:
+            bias_scores["Depth"] = 0.5
+            bias_emojis["Depth"] = "🐂"
+        elif depth_bias_score < -0.3:
+            bias_scores["Depth"] = -1
+            bias_emojis["Depth"] = "🐻"
+        elif depth_bias_score < -0.1:
+            bias_scores["Depth"] = -0.5
+            bias_emojis["Depth"] = "🐻"
+        else:
+            bias_scores["Depth"] = 0
+            bias_emojis["Depth"] = "⚖️"
+
+        bias_interpretations["Depth"] = f"CE:{depth_data['ce_total']:,} PE:{depth_data['pe_total']:,}"
+    else:
+        # No depth data available
+        bias_scores["Depth"] = 0
+        bias_emojis["Depth"] = "⚪"
+        bias_interpretations["Depth"] = "N/A"
+
     # Calculate overall verdict for this strike
     total_bias = sum(bias_scores.values())
     if total_bias >= 3:
@@ -1135,8 +1174,8 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
 
 def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
     """
-    Create tabulation for ATM ±2 strikes with 12 bias metrics each
-    (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR)
+    Create tabulation for ATM ±2 strikes with 13 bias metrics each
+    (OI, ChgOI, Vol, Δ, γ, Prem, IV, ΔExp, γExp, IVSkew, OIRate, PCR, Depth)
     Returns: list of strike analyses
     """
     strike_analyses = []
@@ -1191,10 +1230,10 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         verdict_color = "#FFD700"
         bullish_metrics = 0
         bearish_metrics = 0
-        total_metrics = 12
+        total_metrics = 13
 
     # Display overall bias summary
-    st.markdown("### 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation")
+    st.markdown("### 📊 ATM ±2 Strikes - 13 Bias Metrics Tabulation")
 
     col1, col2, col3 = st.columns(3)
 
@@ -1261,7 +1300,7 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
     st.markdown("<br/>", unsafe_allow_html=True)
 
     # Create header row
-    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "Verdict"]
+    metrics = ["Strike", "OI", "ChgOI", "Vol", "Δ", "γ", "Prem", "IV", "ΔExp", "γExp", "IVSkew", "OIRate", "PCR", "Depth", "Verdict"]
 
     # Build HTML table
     html = '<div style="overflow-x: auto;"><table style="width:100%; border-collapse: collapse; font-size: 12px;">'
@@ -1288,8 +1327,8 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         # Strike price
         html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center; font-weight: bold;">{strike}</td>'
 
-        # 12 bias metrics
-        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate", "PCR"]:
+        # 13 bias metrics
+        for metric in ["OI", "ChgOI", "Volume", "Delta", "Gamma", "Premium", "IV", "DeltaExp", "GammaExp", "IVSkew", "OIChgRate", "PCR", "Depth"]:
             emoji = analysis["bias_emojis"].get(metric, "⚖️")
             score = analysis["bias_scores"].get(metric, 0)
             html += f'<td style="padding: 8px; border: 1px solid #444; text-align: center;">{emoji}<br/><small>{score:+.1f}</small></td>'
@@ -4402,7 +4441,8 @@ def parse_dhan_option_chain(chain_data):
                 "Chg_OI_CE": safe_int(ce.get("oi",0)) - safe_int(ce.get("previous_oi",0)),
                 "Vol_CE": safe_int(ce.get("volume",0)),
                 "LTP_CE": safe_float(ce.get("last_price",0.0)),
-                "IV_CE": safe_float(ce.get("implied_volatility", np.nan))
+                "IV_CE": safe_float(ce.get("implied_volatility", np.nan)),
+                "SecurityId_CE": safe_int(ce.get("SEM_EXM_EXCH_ID", 0))  # For market depth
             }
             ce_rows.append(ci)
         if pe:
@@ -4412,7 +4452,8 @@ def parse_dhan_option_chain(chain_data):
                 "Chg_OI_PE": safe_int(pe.get("oi",0)) - safe_int(pe.get("previous_oi",0)),
                 "Vol_PE": safe_int(pe.get("volume",0)),
                 "LTP_PE": safe_float(pe.get("last_price",0.0)),
-                "IV_PE": safe_float(pe.get("implied_volatility", np.nan))
+                "IV_PE": safe_float(pe.get("implied_volatility", np.nan)),
+                "SecurityId_PE": safe_int(pe.get("SEM_EXM_EXCH_ID", 0))  # For market depth
             }
             pe_rows.append(pi)
     return pd.DataFrame(ce_rows), pd.DataFrame(pe_rows)
