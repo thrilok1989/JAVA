@@ -1014,12 +1014,16 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             display_market_regime_assessment
         )
 
-        # Display market regime assessment (always show, even without signal)
-        try:
-            display_market_regime_assessment()
+        # Display market regime assessment only if data is available
+        if 'nifty_option_screener_data' in st.session_state:
+            try:
+                display_market_regime_assessment()
+                st.markdown("---")
+            except Exception as e:
+                pass  # Silently skip if assessment fails
+        else:
+            st.info("💡 Market regime assessment will appear after running option screener analysis (Tab 8).")
             st.markdown("---")
-        except Exception as e:
-            st.info("💡 Market regime assessment will appear after running analyses.")
 
         # Get all required data for signal generation
         if 'bias_analysis_results' in st.session_state:
@@ -1108,8 +1112,11 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
             st.info("💡 Signal generation requires bias analysis data. Running analyses will enable signal generation.")
 
     except Exception as e:
+        import traceback
         st.error(f"❌ Signal generation error: {e}")
         st.caption("Signal system requires all indicator data to be loaded. Please ensure all analyses have completed successfully.")
+        with st.expander("🔍 Error Details (Debug)"):
+            st.code(traceback.format_exc())
 
     st.markdown("---")
 
