@@ -1024,9 +1024,11 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         )
 
         # Display market regime assessment (always show, even without signal)
-        display_market_regime_assessment()
-
-        st.markdown("---")
+        try:
+            display_market_regime_assessment()
+            st.markdown("---")
+        except Exception as e:
+            st.info("💡 Market regime assessment will appear after running analyses.")
 
         # Get all required data for signal generation
         if 'bias_analysis_results' in st.session_state:

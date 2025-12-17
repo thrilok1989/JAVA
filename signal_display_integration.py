@@ -155,11 +155,17 @@ def display_market_regime_assessment():
     Display comprehensive market regime assessment
     Combines: Seller Bias + ATM Bias + Moment + Expiry + OI/PCR
     """
+    # Check if we have minimum required data
+    if 'nifty_option_screener_data' not in st.session_state:
+        st.info("💡 Market regime assessment will appear after running option screener analysis.")
+        return
+
     st.markdown("### 📊 FINAL ASSESSMENT (Seller + ATM Bias + Moment + Expiry + OI/PCR)")
 
-    # Get data from session state
+    # Get data from session state with safe access
     nifty_screener_data = st.session_state.get('nifty_option_screener_data', {})
-    option_chain = st.session_state.get('overall_option_data', {}).get('NIFTY', {})
+    overall_option_data = st.session_state.get('overall_option_data', {})
+    option_chain = overall_option_data.get('NIFTY', {}) if isinstance(overall_option_data, dict) else {}
     volatility_result = st.session_state.get('volatility_regime_result', {})
 
     # Extract key metrics
