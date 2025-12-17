@@ -883,7 +883,8 @@ def display_bias_dashboard(atm_bias, support_bias, resistance_bias):
 
 def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
     """
-    Calculate 11 bias metrics for a single strike
+    Calculate 13 bias metrics for a single strike (Seller's Perspective)
+    Includes: OI, ChgOI, Vol, Delta, Gamma, Premium, IV, DeltaExp, GammaExp, IVSkew, OIChgRate, PCR, Depth
     Returns: dict with bias scores, emojis, and interpretations for one strike
     """
     bias_scores = {}
@@ -1079,6 +1080,52 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
         bias_emojis["PCR"] = "⚖️"
     bias_interpretations["PCR"] = f"Strike PCR: {pcr_strike:.2f}"
 
+    # 13. BID/ASK DEPTH BIAS (Seller's Perspective)
+    # Extract bid/ask quantities
+    ce_bid_qty = strike_data.get("BidQty_CE", 0)
+    pe_bid_qty = strike_data.get("BidQty_PE", 0)
+    ce_ask_qty = strike_data.get("AskQty_CE", 0)
+    pe_ask_qty = strike_data.get("AskQty_PE", 0)
+
+    # Seller's View:
+    # BID side = Buyers (people buying from sellers)
+    # ASK side = Sellers (people selling)
+
+    # If Call Bid > Put Bid → More buyers want calls → Bearish (expecting up move)
+    # If Put Bid > Call Bid → More buyers want puts → Bullish (expecting down move protection)
+    # If Call Ask > Put Ask → More sellers offering calls → Bullish (sellers betting price won't go up)
+    # If Put Ask > Call Ask → More sellers offering puts → Bearish (sellers betting price won't go down)
+
+    depth_score = 0
+
+    # Analyze BID depth (buying pressure)
+    if pe_bid_qty > 0 or ce_bid_qty > 0:
+        bid_ratio = pe_bid_qty / max(ce_bid_qty, 1)
+        if bid_ratio > 1.3:  # More PUT buyers (bearish protection = bullish sellers)
+            depth_score += 0.5
+        elif bid_ratio < 0.77:  # More CALL buyers (bullish bets = bearish sellers)
+            depth_score -= 0.5
+
+    # Analyze ASK depth (selling pressure)
+    if pe_ask_qty > 0 or ce_ask_qty > 0:
+        ask_ratio = ce_ask_qty / max(pe_ask_qty, 1)
+        if ask_ratio > 1.3:  # More CALL sellers (bearish view = bullish)
+            depth_score += 0.5
+        elif ask_ratio < 0.77:  # More PUT sellers (bullish view = bearish)
+            depth_score -= 0.5
+
+    # Final depth bias
+    if depth_score > 0.5:
+        bias_scores["Depth"] = 1
+        bias_emojis["Depth"] = "🐂"
+    elif depth_score < -0.5:
+        bias_scores["Depth"] = -1
+        bias_emojis["Depth"] = "🐻"
+    else:
+        bias_scores["Depth"] = 0
+        bias_emojis["Depth"] = "⚪"  # White circle for neutral
+    bias_interpretations["Depth"] = f"Bid: PE/CE {pe_bid_qty/max(ce_bid_qty,1):.2f} | Ask: CE/PE {ce_ask_qty/max(pe_ask_qty,1):.2f}"
+
     # Calculate overall verdict for this strike
     total_bias = sum(bias_scores.values())
     if total_bias >= 3:
@@ -1110,7 +1157,8 @@ def analyze_individual_strike_bias(strike_data, strike_price, atm_strike):
 
 def create_atm_strikes_tabulation(merged_df, spot, atm_strike, strike_gap):
     """
-    Create tabulation for ATM ±2 strikes with 12 bias metrics each
+    Create tabulation for ATM ±2 strikes with 13 bias metrics each
+    Includes Bid/Ask Depth analysis from seller's perspective
     Returns: list of strike analyses
     """
     strike_analyses = []
@@ -1165,10 +1213,10 @@ def display_atm_strikes_tabulation(strike_analyses, atm_strike):
         verdict_color = "#FFD700"
         bullish_metrics = 0
         bearish_metrics = 0
-        total_metrics = 12
+        total_metrics = 13
 
     # Display overall bias summary
-    st.markdown("### 📊 ATM ±2 Strikes - 12 Bias Metrics Tabulation")
+    st.markdown("### 📊 ATM ±2 Strikes - 13 Bias Metrics Tabulation")
 
     col1, col2, col3 = st.columns(3)
 
