@@ -32,6 +32,25 @@ import os
 from dotenv import load_dotenv
 import json
 
+# Import advanced market depth analysis
+try:
+    from market_depth_advanced import (
+        get_real_option_depth_from_dhan,
+        analyze_depth_levels,
+        detect_market_maker_activity,
+        analyze_liquidity_profile,
+        analyze_order_flow,
+        analyze_volume_profile,
+        analyze_market_microstructure,
+        calculate_depth_quality,
+        detect_algo_patterns,
+        calculate_market_impact,
+        run_comprehensive_depth_analysis
+    )
+    ADVANCED_DEPTH_AVAILABLE = True
+except ImportError:
+    ADVANCED_DEPTH_AVAILABLE = False
+
 # -----------------------
 #  IST TIMEZONE SETUP
 # -----------------------
@@ -3602,6 +3621,251 @@ def display_market_depth_dashboard(spot, depth_analysis, depth_signals, enhanced
                 st.markdown(f"**R{i}:** ₹{price:,.2f} (Qty: {qty:,})")
 
 # -----------------------
+# 🎯 COMPREHENSIVE MARKET DEPTH DASHBOARD (ADVANCED)
+# -----------------------
+
+def display_comprehensive_depth_analysis(analysis_results):
+    """
+    Display ALL advanced depth analysis metrics in organized sections
+    """
+    if not analysis_results.get("available"):
+        st.warning("⚠️ Advanced depth analysis unavailable")
+        return
+
+    st.markdown("---")
+    st.markdown("## 🎯 COMPREHENSIVE MARKET DEPTH ANALYSIS")
+
+    # SECTION 1: ORDER FLOW ANALYSIS
+    if analysis_results.get("order_flow", {}).get("available"):
+        st.markdown("### 📊 Order Flow Analysis")
+        flow = analysis_results["order_flow"]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Aggressive Buys", f"{flow['aggressive_buy_volume']:,}")
+            st.metric("Passive Buys", f"{flow['passive_buy_volume']:,}")
+
+        with col2:
+            st.metric("Aggressive Sells", f"{flow['aggressive_sell_volume']:,}")
+            st.metric("Passive Sells", f"{flow['passive_sell_volume']:,}")
+
+        with col3:
+            buy_pressure = flow['buy_pressure_pct']
+            st.metric("Buy Pressure", f"{buy_pressure:.1f}%",
+                     delta="Bullish" if buy_pressure > 60 else ("Bearish" if buy_pressure < 40 else None))
+
+        with col4:
+            sell_pressure = flow['sell_pressure_pct']
+            st.metric("Sell Pressure", f"{sell_pressure:.1f}%",
+                     delta="Bearish" if sell_pressure > 60 else ("Bullish" if sell_pressure < 40 else None))
+
+        if flow.get("large_orders"):
+            st.markdown("**🐋 Large Orders Detected:**")
+            large = flow["large_orders"]
+            st.write(f"- Bid side: {large['bid_large']} large orders ({large['bid_institutional']} institutional)")
+            st.write(f"- Ask side: {large['ask_large']} large orders ({large['ask_institutional']} institutional)")
+
+        st.info(f"💡 {flow['flow_interpretation']}")
+
+    # SECTION 2: MARKET MAKER DETECTION
+    if analysis_results.get("market_maker", {}).get("available"):
+        st.markdown("### 🏦 Market Maker Activity")
+        mm = analysis_results["market_maker"]
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            score = mm['mm_presence_score']
+            color = "🟢" if score > 70 else ("🟡" if score > 40 else "🔴")
+            st.markdown(f"""
+            <div style="text-align: center; padding: 15px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <div style="font-size: 0.9rem; color:#cccccc;">MM Presence Score</div>
+                <div style="font-size: 2rem; font-weight:700;">{color} {score}/100</div>
+                <div style="font-size: 0.8rem; color:#aaaaaa;">{mm['interpretation']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.metric("Round Number Orders", f"{mm['round_number_orders_pct']:.1f}%")
+            st.metric("Lot-Based Orders", f"{mm['lot_based_orders_pct']:.1f}%")
+
+        with col3:
+            st.metric("Bid-Ask Spread", f"{mm['spread_pct']:.3f}%")
+            st.metric("Spread Consistency", f"{mm['spread_consistency']*100:.0f}%")
+
+    # SECTION 3: LIQUIDITY PROFILE
+    if analysis_results.get("liquidity_profile", {}).get("available"):
+        st.markdown("### 💧 Liquidity Profile & Market Impact")
+        liq = analysis_results["liquidity_profile"]
+
+        # Top 5 concentration
+        st.markdown("**Depth Concentration:**")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Top 5 Bid Concentration", f"{liq['top5_concentration']['top5_bid_pct']:.1f}%")
+        with col2:
+            st.metric("Top 5 Ask Concentration", f"{liq['top5_concentration']['top5_ask_pct']:.1f}%")
+
+        # Market Impact Table
+        st.markdown("**📈 Market Impact Estimates:**")
+
+        impact_data = []
+        for size in ["1k_contracts", "5k_contracts", "10k_contracts"]:
+            impact = liq["price_impact"][size]
+            impact_data.append({
+                "Order Size": size.replace("_contracts", ""),
+                "Avg Execution Price": f"₹{impact['avg_execution_price']:.2f}",
+                "Impact %": f"{impact['impact_pct']:.3f}%",
+                "Levels Consumed": impact['levels_consumed'],
+                "Filled Qty": f"{impact['filled']:,}"
+            })
+
+        impact_df = pd.DataFrame(impact_data)
+        st.dataframe(impact_df, use_container_width=True)
+
+        # Slippage
+        st.markdown("**💸 Slippage Costs:**")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("1K Contracts Slippage", f"{liq['slippage']['1k_contracts_pct']:.3f}%")
+        with col2:
+            st.metric("5K Contracts Slippage", f"{liq['slippage']['5k_contracts_pct']:.3f}%")
+
+        # Fragility warning
+        fragility = liq.get("liquidity_fragility_score", 0)
+        if fragility > 70:
+            st.warning(f"⚠️ High Liquidity Fragility ({fragility:.0f}/100) - Large orders may significantly impact price")
+
+    # SECTION 4: DEPTH QUALITY
+    if analysis_results.get("depth_quality", {}).get("available"):
+        st.markdown("### ⭐ Depth Quality Metrics")
+        qual = analysis_results["depth_quality"]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            thickness = qual['thickness_score']
+            st.metric("Thickness", f"{thickness}/100")
+
+        with col2:
+            resilience = qual['resilience_score']
+            st.metric("Resilience", f"{resilience}/100")
+
+        with col3:
+            granularity = qual['granularity_score']
+            st.metric("Granularity", f"{granularity}/100")
+
+        with col4:
+            overall = qual['overall_quality_score']
+            color = "🟢" if overall > 75 else ("🟡" if overall > 50 else "🔴")
+            st.markdown(f"""
+            <div style="text-align: center; padding: 10px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <div style="font-size: 0.8rem; color:#cccccc;">Overall Quality</div>
+                <div style="font-size: 1.5rem; font-weight:700;">{color} {overall}/100</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.info(f"💡 {qual['interpretation']} - Total Depth: {qual['total_depth_contracts']:,} contracts")
+
+    # SECTION 5: MARKET MICROSTRUCTURE
+    if analysis_results.get("microstructure", {}).get("available"):
+        st.markdown("### 🔬 Market Microstructure Signals")
+        micro = analysis_results["microstructure"]
+
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Informed Trading", f"{micro['informed_trading_score']}/100")
+            st.caption(micro['signals']['informed_trading'])
+
+        with col2:
+            st.metric("Liquidity Provision", f"{micro['liquidity_provision_score']}/100")
+            st.caption(micro['signals']['liquidity_provision'])
+
+        with col3:
+            st.metric("Stop Hunt Risk", f"{micro['stop_hunt_probability']}/100")
+            st.caption(micro['signals']['stop_hunt_risk'])
+
+        with col4:
+            st.metric("Gamma Hedging", f"{micro['gamma_hedging_score']}/100")
+            st.caption(micro['signals']['gamma_hedging'])
+
+    # SECTION 6: ALGORITHMIC PATTERNS
+    if analysis_results.get("algo_patterns", {}).get("available"):
+        st.markdown("### 🤖 Algorithmic Trading Patterns")
+        algo = analysis_results["algo_patterns"]
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric("TWAP/VWAP Detected", "Yes ✅" if algo['twap_vwap_detected'] else "No ❌")
+
+        with col2:
+            st.metric("Iceberg Orders", "Detected 🧊" if algo['iceberg_detected'] else "None")
+
+        with col3:
+            st.metric("Quote Stuffing", "Yes ⚠️" if algo['quote_stuffing_detected'] else "No")
+
+        st.metric("Spoofing Probability", f"{algo['spoofing_probability']}/100")
+        st.caption(f"Update Frequency: {algo['update_frequency']} updates/sec")
+
+    # SECTION 7: DEPTH LEVEL DETAILS
+    if analysis_results.get("depth_levels", {}).get("available"):
+        st.markdown("### 📊 Depth Level Analysis")
+        levels = analysis_results["depth_levels"]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Bid Side:**")
+            st.metric("Total Bid Qty", f"{levels['total_bid_qty']:,}")
+            st.metric("Top 3 Concentration", f"{levels['top3_concentration']['bid_pct']:.1f}%")
+            st.metric("Iceberg Probability", f"{levels['iceberg_probability']['bid']*100:.1f}%")
+
+        with col2:
+            st.markdown("**Ask Side:**")
+            st.metric("Total Ask Qty", f"{levels['total_ask_qty']:,}")
+            st.metric("Top 3 Concentration", f"{levels['top3_concentration']['ask_pct']:.1f}%")
+            st.metric("Iceberg Probability", f"{levels['iceberg_probability']['ask']*100:.1f}%")
+
+        imbalance = levels['depth_imbalance']
+        color = "🟢" if imbalance > 0.1 else ("🔴" if imbalance < -0.1 else "⚪")
+        st.metric("Depth Imbalance", f"{color} {imbalance:+.3f}")
+
+    # SECTION 8: MARKET IMPACT SUMMARY
+    st.markdown("### 💰 Market Impact Summary")
+
+    impact_sizes = ["1k", "5k", "10k"]
+    for size in impact_sizes:
+        impact_key = f"market_impact_{size}"
+        if analysis_results.get(impact_key, {}).get("available"):
+            impact = analysis_results[impact_key]
+
+            with st.expander(f"📊 {size.upper()} Contracts Order Impact"):
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.metric("Total Impact", f"{impact['total_impact_bps']:.2f} bps")
+                    st.metric("Temporary Impact", f"{impact['temporary_impact_bps']:.2f} bps")
+
+                with col2:
+                    st.metric("Permanent Impact", f"{impact['permanent_impact_bps']:.2f} bps")
+                    st.metric("Slippage Cost", f"₹{impact['slippage_cost']:.2f}")
+
+                with col3:
+                    st.metric("Participation Rate", f"{impact['participation_rate_pct']:.2f}%")
+
+                st.info(f"**Recommended Strategy:** {impact['optimal_strategy']}")
+
+                # Immediate impact details
+                imm = impact['immediate_impact']
+                st.write(f"- Average execution price: ₹{imm['avg_price']:.2f}")
+                st.write(f"- Levels consumed: {imm['levels_consumed']}")
+                st.write(f"- Unfilled quantity: {imm['unfilled_qty']:,}")
+
+
+# -----------------------
 # 🔥 ENTRY SIGNAL CALCULATION (EXTENDED WITH MOMENT DETECTOR & ATM BIAS)
 # -----------------------
 def calculate_realistic_stop_loss_target(position_type, entry_price, nearest_sup, nearest_res, strike_gap, max_risk_pct=1.5):
@@ -5409,8 +5673,61 @@ def render_nifty_option_screener():
     # ═══════════════════════════════════════════════════════════════════
 
     with screener_tabs[4]:
-        # Display Market Depth Dashboard
+        # Display Basic Market Depth Dashboard
         display_market_depth_dashboard(spot, depth_analysis, depth_signals, depth_enhanced_pressure)
+
+        # Display Comprehensive Advanced Depth Analysis
+        if ADVANCED_DEPTH_AVAILABLE:
+            st.markdown("---")
+            st.markdown("## 🎯 ADVANCED DEPTH ANALYSIS (ATM ±2 Strikes)")
+
+            # Prepare Dhan config
+            dhan_config = {
+                "base_url": DHAN_BASE_URL,
+                "access_token": DHAN_ACCESS_TOKEN,
+                "client_id": DHAN_CLIENT_ID
+            }
+
+            # Run comprehensive analysis for ATM ±2 strikes
+            atm_strikes_to_analyze = [atm_strike + (i * strike_gap) for i in range(-2, 3)]
+
+            for strike in atm_strikes_to_analyze:
+                with st.expander(f"📊 Strike {strike} - Comprehensive Depth Analysis"):
+                    st.markdown(f"### Analyzing {strike} CE & PE")
+
+                    # Analyze CE
+                    st.markdown("#### 📈 CALL Option (CE)")
+                    ce_analysis = run_comprehensive_depth_analysis(
+                        strike=strike,
+                        expiry=expiry,
+                        option_type="CE",
+                        dhan_config=dhan_config,
+                        depth_history=None  # TODO: Implement depth history tracking
+                    )
+
+                    if ce_analysis.get("available"):
+                        display_comprehensive_depth_analysis(ce_analysis)
+                    else:
+                        st.warning(f"CE analysis unavailable: {ce_analysis.get('error', 'Unknown error')}")
+
+                    st.markdown("---")
+
+                    # Analyze PE
+                    st.markdown("#### 📉 PUT Option (PE)")
+                    pe_analysis = run_comprehensive_depth_analysis(
+                        strike=strike,
+                        expiry=expiry,
+                        option_type="PE",
+                        dhan_config=dhan_config,
+                        depth_history=None
+                    )
+
+                    if pe_analysis.get("available"):
+                        display_comprehensive_depth_analysis(pe_analysis)
+                    else:
+                        st.warning(f"PE analysis unavailable: {pe_analysis.get('error', 'Unknown error')}")
+        else:
+            st.info("ℹ️ Advanced depth analysis module not available. Install `market_depth_advanced.py` for full functionality.")
 
     # ═══════════════════════════════════════════════════════════════════
     # SUB-TAB 5: EXPIRY ANALYSIS
