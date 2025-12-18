@@ -8,7 +8,22 @@ This script validates:
 4. Signal confidence and confluence calculations
 
 Usage:
+    # Run in the same Python environment as your Streamlit app
+    # If using virtual environment:
+    source venv/bin/activate  # or activate your venv
     python test_signal_generation.py
+
+    # If using conda:
+    conda activate your_env
+    python test_signal_generation.py
+
+    # If dependencies not installed:
+    pip install pandas numpy xgboost scikit-learn streamlit
+
+Requirements:
+    - pandas, numpy, xgboost, scikit-learn
+    - Same environment as Streamlit app
+    - telegram_alerts.py configured (optional)
 """
 
 import sys
@@ -20,10 +35,25 @@ from typing import Dict, Optional
 sys.path.insert(0, '/home/user/JAVA')
 sys.path.insert(0, '/home/user/JAVA/src')
 
-from src.xgboost_ml_analyzer import XGBoostMLAnalyzer
-from src.enhanced_signal_generator import EnhancedSignalGenerator, TradingSignal
-from src.telegram_signal_manager import TelegramSignalManager
-from telegram_alerts import TelegramBot
+# Try to import dependencies
+try:
+    from src.xgboost_ml_analyzer import XGBoostMLAnalyzer
+    from src.enhanced_signal_generator import EnhancedSignalGenerator, TradingSignal
+    from src.telegram_signal_manager import TelegramSignalManager
+    from telegram_alerts import TelegramBot
+except ImportError as e:
+    print("\n" + "="*70)
+    print("❌ DEPENDENCY ERROR")
+    print("="*70)
+    print(f"\nMissing dependency: {e}")
+    print("\nThis test script must be run in the same Python environment")
+    print("as your Streamlit app. Please ensure all dependencies are installed:")
+    print("\n  pip install pandas numpy xgboost scikit-learn streamlit")
+    print("\nIf using a virtual environment, activate it first:")
+    print("  source venv/bin/activate")
+    print("\nThen run this script again.")
+    print("="*70 + "\n")
+    sys.exit(1)
 
 
 class SignalGenerationTester:

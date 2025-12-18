@@ -18,9 +18,25 @@ This guide provides step-by-step instructions for testing the Market Regime XGBo
 
 ### Run Automated Test Suite
 
+**Important:** Run this in the same Python environment as your Streamlit app!
+
 ```bash
 cd /home/user/JAVA
+
+# If using virtual environment, activate it first:
+source venv/bin/activate  # or your venv activation command
+
+# If using conda:
+# conda activate your_env
+
+# Run tests
 python test_signal_generation.py
+```
+
+**If you get "ModuleNotFoundError":**
+```bash
+# Install dependencies in your environment
+pip install pandas numpy xgboost scikit-learn streamlit
 ```
 
 **This will validate:**
