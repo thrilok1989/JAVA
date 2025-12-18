@@ -399,7 +399,8 @@ if 'chart_data' not in st.session_state:
 if 'data_preloaded' not in st.session_state:
     st.session_state.data_preloaded = False
     # Start background data loading on first run
-    preload_all_data()
+    # TEMPORARILY DISABLED TO DEBUG BOOT ISSUE
+    # preload_all_data()
     st.session_state.data_preloaded = True
 
 # NSE Options Analyzer - Initialize instruments session state
@@ -462,7 +463,8 @@ st.title(APP_TITLE)
 st.caption(APP_SUBTITLE)
 
 # Check and run AI analysis if needed
-check_and_run_ai_analysis()
+# TEMPORARILY DISABLED TO DEBUG BOOT ISSUE
+# check_and_run_ai_analysis()
 
 # ═══════════════════════════════════════════════════════════════════════
 # MARKET HOURS WARNING BANNER

@@ -1013,7 +1013,8 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
     # ═══════════════════════════════════════════════════════════════════
 
     # Feature flag for signal integration (set to False to disable during debugging)
-    ENABLE_SIGNAL_INTEGRATION = True
+    # TEMPORARILY DISABLED TO DEBUG BOOT ISSUE
+    ENABLE_SIGNAL_INTEGRATION = False
 
     if not ENABLE_SIGNAL_INTEGRATION:
         st.info("🔧 Signal integration is temporarily disabled.")
