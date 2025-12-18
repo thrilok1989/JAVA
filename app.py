@@ -399,8 +399,7 @@ if 'chart_data' not in st.session_state:
 if 'data_preloaded' not in st.session_state:
     st.session_state.data_preloaded = False
     # Start background data loading on first run
-    # TEMPORARILY DISABLED TO DEBUG BOOT ISSUE
-    # preload_all_data()
+    preload_all_data()
     st.session_state.data_preloaded = True
 
 # NSE Options Analyzer - Initialize instruments session state
@@ -463,8 +462,7 @@ st.title(APP_TITLE)
 st.caption(APP_SUBTITLE)
 
 # Check and run AI analysis if needed
-# TEMPORARILY DISABLED TO DEBUG BOOT ISSUE
-# check_and_run_ai_analysis()
+check_and_run_ai_analysis()
 
 # ═══════════════════════════════════════════════════════════════════════
 # MARKET HOURS WARNING BANNER
@@ -1746,46 +1744,20 @@ with tab1:
 
 with tab2:
     st.header("🎯 Create New Trade Setup")
-
-    # ═══════════════════════════════════════════════════════════════════
-    # SIGNAL AUTO-FILL BANNER (PHASE 4 INTEGRATION)
-    # ═══════════════════════════════════════════════════════════════════
-    try:
-        from signal_display_integration import display_signal_autofill_banner
-        display_signal_autofill_banner()
-    except Exception as e:
-        pass  # Silently fail if signal system not available
-
-    # Check if we have auto-filled params from signal
-    if 'signal_setup_params' in st.session_state:
-        setup_params = st.session_state.signal_setup_params
-        default_index = setup_params.get('index', 'NIFTY')
-        default_direction = setup_params.get('direction', 'CALL')
-        default_support = setup_params.get('vob_support', 25000.0)
-        default_resistance = setup_params.get('vob_resistance', 25100.0)
-        # Clear after use
-        del st.session_state.signal_setup_params
-    else:
-        default_index = 'NIFTY'
-        default_direction = 'CALL'
-        default_support = None
-        default_resistance = None
-
+    
     col1, col2 = st.columns(2)
-
+    
     with col1:
         selected_index = st.selectbox(
             "Select Index",
             ["NIFTY", "SENSEX"],
-            index=0 if default_index == "NIFTY" else 1,
             key="setup_index"
         )
-
+    
     with col2:
         selected_direction = st.selectbox(
             "Select Direction",
             ["CALL", "PUT"],
-            index=0 if default_direction == "CALL" else 1,
             key="setup_direction"
         )
     
@@ -1795,38 +1767,30 @@ with tab2:
     
     with col1:
         # Safe default value handling for VOB support level
-        if default_support is not None:
-            # Use signal-provided support
-            calculated_support = default_support
-        else:
-            try:
-                calculated_support = max(0.0, float(nifty_data['spot_price']) - 50.0) if nifty_data.get('spot_price') and nifty_data['spot_price'] not in [None, 0, 'N/A'] else 25000.0
-            except (TypeError, ValueError):
-                calculated_support = 25000.0
+        try:
+            default_support = max(0.0, float(nifty_data['spot_price']) - 50.0) if nifty_data.get('spot_price') and nifty_data['spot_price'] not in [None, 0, 'N/A'] else 25000.0
+        except (TypeError, ValueError):
+            default_support = 25000.0
 
         vob_support = st.number_input(
             "VOB Support Level",
             min_value=0.0,
-            value=calculated_support,
+            value=default_support,
             step=10.0,
             key="vob_support"
         )
 
     with col2:
         # Safe default value handling for VOB resistance level
-        if default_resistance is not None:
-            # Use signal-provided resistance
-            calculated_resistance = default_resistance
-        else:
-            try:
-                calculated_resistance = max(0.0, float(nifty_data['spot_price']) + 50.0) if nifty_data.get('spot_price') and nifty_data['spot_price'] not in [None, 0, 'N/A'] else 25100.0
-            except (TypeError, ValueError):
-                calculated_resistance = 25100.0
+        try:
+            default_resistance = max(0.0, float(nifty_data['spot_price']) + 50.0) if nifty_data.get('spot_price') and nifty_data['spot_price'] not in [None, 0, 'N/A'] else 25100.0
+        except (TypeError, ValueError):
+            default_resistance = 25100.0
 
         vob_resistance = st.number_input(
             "VOB Resistance Level",
             min_value=0.0,
-            value=calculated_resistance,
+            value=default_resistance,
             step=10.0,
             key="vob_resistance"
         )
@@ -2070,19 +2034,6 @@ with tab3:
 
 with tab4:
     st.header("📈 Active Positions & Monitoring")
-
-    # ═══════════════════════════════════════════════════════════════════
-    # EXIT SIGNAL ALERTS (PHASE 4 INTEGRATION)
-    # ═══════════════════════════════════════════════════════════════════
-    try:
-        from signal_display_integration import check_and_display_exit_alerts
-        if 'current_signal' in st.session_state and 'active_positions' in st.session_state:
-            check_and_display_exit_alerts(
-                st.session_state.active_positions,
-                st.session_state.current_signal
-            )
-    except Exception as e:
-        pass  # Silently fail if signal system not available
 
     # Initialize active_positions in session state if not exists
     if 'active_positions' not in st.session_state:
@@ -3354,31 +3305,6 @@ with tab7:
 
                 # Display chart
                 st.plotly_chart(fig, use_container_width=True)
-
-                # ═══════════════════════════════════════════════════════════════════
-                # SIGNAL ANNOTATIONS ON CHART (PHASE 4 INTEGRATION)
-                # ═══════════════════════════════════════════════════════════════════
-                try:
-                    if 'current_signal' in st.session_state and st.session_state.current_signal:
-                        signal = st.session_state.current_signal
-
-                        # Display signal banner below chart
-                        if signal.signal_type == "ENTRY":
-                            st.success(f"🎯 **ENTRY SIGNAL:** {signal.direction} {signal.option_type} | "
-                                      f"Strike: {signal.strike} | Entry: ₹{signal.entry_price:.2f} | "
-                                      f"SL: ₹{signal.stop_loss:.2f} | Confidence: {signal.confidence:.1f}%")
-                        elif signal.signal_type == "EXIT":
-                            st.error(f"🚨 **EXIT SIGNAL:** {signal.direction} | "
-                                    f"Confidence: {signal.confidence:.1f}% | {signal.reason}")
-                        elif signal.signal_type == "DIRECTION_CHANGE":
-                            st.warning(f"🔄 **DIRECTION CHANGE:** New direction {signal.direction} | "
-                                      f"Confidence: {signal.confidence:.1f}%")
-                        elif signal.signal_type == "BIAS_CHANGE":
-                            st.info(f"⚠️ **BIAS CHANGE:** Market regime changed | {signal.reason}")
-                        else:  # WAIT
-                            st.info(f"⏸️ **WAIT:** {signal.reason}")
-                except Exception as e:
-                    pass  # Silently fail if signal system not available
 
                 # Chart statistics
                 st.subheader("📊 Chart Statistics")
