@@ -868,7 +868,8 @@ def render_overall_market_sentiment(NSE_INSTRUMENTS=None):
         st.session_state.sentiment_auto_run_done = False
 
     # Auto-run analyses on first load
-    if not st.session_state.sentiment_auto_run_done and NSE_INSTRUMENTS is not None:
+    # DISABLED TO PREVENT BOOT HANG - User can manually run analyses
+    if False and not st.session_state.sentiment_auto_run_done and NSE_INSTRUMENTS is not None:
         with st.spinner("🔄 Running initial analyses..."):
             success, errors = asyncio.run(run_all_analyses(NSE_INSTRUMENTS))
             st.session_state.sentiment_auto_run_done = True
