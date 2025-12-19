@@ -4419,11 +4419,8 @@ def render_nifty_option_screener():
 
             price_df = get_cached_chart_data('^NSEI', '1d', '1m')
             if price_df is not None and not price_df.empty:
-                # Add indicators if not present
-                if 'ATR' not in price_df.columns:
-                    from advanced_chart_analysis import AdvancedChartAnalysis
-                    chart_analyzer = AdvancedChartAnalysis()
-                    price_df = chart_analyzer.add_indicators(price_df)
+                # ML regime detector can work without additional indicators
+                # It calculates necessary features from OHLCV data
                 st.session_state.data_df = price_df
             else:
                 price_df = None
